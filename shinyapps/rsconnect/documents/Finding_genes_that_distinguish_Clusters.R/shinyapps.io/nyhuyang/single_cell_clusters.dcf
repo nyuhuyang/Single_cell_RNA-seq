@@ -1,0 +1,11 @@
+name: single_cell_clusters
+title: Single_cell_clusters
+account: nyhuyang
+server: shinyapps.io
+appId: 188906
+bundleId: 866053
+url: https://nyhuyang.shinyapps.io/single_cell_clusters/
+when: 1497396613.90028
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .httr-oauth|droptoken.rds|Finding_genes_that_distinguish_Clusters2.R

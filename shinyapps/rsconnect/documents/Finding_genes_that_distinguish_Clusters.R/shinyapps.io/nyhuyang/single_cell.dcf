@@ -1,0 +1,11 @@
+name: single_cell
+title: single_cell
+account: nyhuyang
+server: shinyapps.io
+appId: 188818
+bundleId: 865980
+url: https://nyhuyang.shinyapps.io/single_cell/
+when: 1497391788.5453
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .httr-oauth|droptoken.rds

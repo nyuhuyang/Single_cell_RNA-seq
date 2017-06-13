@@ -1,0 +1,11 @@
+name: single_cell_expression
+title: Single_cell_expression
+account: nyhuyang
+server: shinyapps.io
+appId: 188909
+bundleId: 866055
+url: https://nyhuyang.shinyapps.io/single_cell_expression/
+when: 1497396858.33457
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .httr-oauth|droptoken.rds|Finding_genes_that_distinguish_Clusters.R
