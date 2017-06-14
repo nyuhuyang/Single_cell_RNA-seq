@@ -102,3 +102,14 @@ readRDS(localfile, ...) #copy from drop_read_csv
 HSMM_epi_3<-drop_read_RDS(paste0(outputDir,"HSMM_epi_3"), dtoken=token)
 
 #How to setup upload UI
+
+#---------2017/6/14 Extract data from S4 and rebuild DESeq------------
+#simpler than I thought
+#while running estimateSizeFactors, the error keeps coming:
+Error in estimateSizeFactorsForMatrix(counts(object), locfunc = locfunc,  :
+every gene contains at least one zero, cannot compute log geometric means
+
+#run this script:
+cts <- counts(ddsHTSeq)
+geoMeans <- apply(cts, 1, function(row) exp(sum(log(row[row != 0]))/length(row)))
+dds <- estimateSizeFactors(ddsHTSeq, geoMeans=geoMeans)
