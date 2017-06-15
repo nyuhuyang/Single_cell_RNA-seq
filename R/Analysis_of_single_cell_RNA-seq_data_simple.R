@@ -1,5 +1,9 @@
 #Identification of important genes
-
+list.of.packages <- c("devtools","dplyr","pheatmap","VGAM", "irlba",
+                      "matrixStats", "igraph", "combinat", "fastICA",
+                      "grid", "reshape2", "plyr", "parallel", "methods")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
 #check package
 library("devtools")
 library("DDRTree")
@@ -11,9 +15,9 @@ library("reshape")
 #### A-1) Setup enviroment and read data
 #detect OS and set enviroment
 if (Sys.info()[['sysname']]=="Darwin"){
-        setwd("/Users/yah2014/Dropbox/Public/Olivier/R/Single_Cell");getwd();list.files()}
+        setwd("/Users/yah2014/Dropbox/Public/Olivier/R/Renant_Single_Cell");getwd();list.files()}
 if (Sys.info()[['sysname']]=="Windows"){
-        setwd("C:/Users/User/Dropbox/Public/Olivier/R/Single_Cell");getwd();list.files()}
+        setwd("C:/Users/User/Dropbox/Public/Olivier/R/Renant_Single_Cell");getwd();list.files()}
 
 count_matrix<-read.csv("counts.merged.txt",sep="\t",header =T, row.names = 1)
 dim(count_matrix)
@@ -82,8 +86,8 @@ cth <- addCellType(cth, "KRT19+ epithelial Cells", classify_func=function(x) {
 #Stromal/fibroblasts - DCN, COL6A1, TIMP3, PDGFRA
 #Endothelial - VWF, EMCN, PECAM1, CDH5
 cth <- addCellType(cth, "Stromal+\nEndothelial+\nFibroblasts Cells", classify_func=function(x) {
-  x[id_("GPX3"),] >= 1 & x[id_("PTPRC"),] == 0 & x[id_("LAPTM5"),] == 0 & x[id_("SRGN"),] == 0  | #Stromal+endothelial
-  x[id_("DCN"),] >= 1 & x[id_("COL6A1"),] >= 1 & x[id_("TIMP3"),] >= 1 & x[id_("PDGFRA"),] >= 1}) #Stromal/fibroblasts
+    x[id_("GPX3"),] >= 1 & x[id_("PTPRC"),] == 0 & x[id_("LAPTM5"),] == 0 & x[id_("SRGN"),] == 0  | #Stromal+endothelial
+    x[id_("DCN"),] >= 1 & x[id_("COL6A1"),] >= 1 & x[id_("TIMP3"),] >= 1 & x[id_("PDGFRA"),] >= 1}) #Stromal/fibroblasts
  #subscript out of bounds
 #  x[id_("VWF"),] >= 1 & x[id_("EMCN"),] >= 1 & x[id_("PECAM1"),] >= 1 & x[id_("CDH5"),] >= 1   }) #Endothelial
 
@@ -174,6 +178,8 @@ pie + coord_polar(theta = "y") +theme(axis.title.x=element_blank(),
                                       legend.key.size = unit(2, "cm"),
                                       text = element_text(size=40),
                                       legend.text = element_text(size=30))
+
+
 #All_Cell_Cluster: 
 plot_cell_clusters(HSMM_3, 1, 2, color="CellType") +
     theme(text = element_text(size=40),
@@ -268,6 +274,7 @@ clustering_DEG_genes<-clustering_DEG_genes[order(clustering_DEG_genes$qval),]
 write.csv(clustering_DEG_genes,"clustering_DEG_genes_cluster.csv")
 
 HSMM_ordering_genes <- row.names(clustering_DEG_genes)[order(clustering_DEG_genes$qval)][1:1000]
+write.csv(HSMM_ordering_genes,"HSMM_ordering_genes.csv",row.names = F)
 plot_ordering_genes(HSMM_epi_3)
 HSMM_epi_3 <- setOrderingFilter(HSMM_epi_3, ordering_genes = HSMM_ordering_genes)
 HSMM_epi_3 <- reduceDimension(HSMM_epi_3)
@@ -386,3 +393,166 @@ plot_genes_branched_pseudotime(HSMM_epi_3[HSMM_epi_genes,],
                                branch_point=1,
                                color_by="Pseudotime",
                                ncol=1)
+#7. Compare the gene expression between cluster using DESeq
+# read gene list and HSMM S4 data
+HSMM_ordering_genes <-read.csv("HSMM_ordering_genes.csv")
+HSMM_ordering_genes<-as.character(unlist(HSMM_ordering_genes))
+HSMM_epi_3<-readRDS("HSMM_epi_3")
+
+# create sample table for DESeq
+sample_epi.table <- pData(HSMM_epi_3)
+head(sample_epi.table) 
+# Creat count matrix
+count_matrix<-read.csv("counts.merged.txt",sep="\t",header =T, row.names = 1)
+count_matrix_epi <-count_matrix[,(colnames(count_matrix)  %in% rownames(sample_epi.table))]
+
+rownames(sample_epi.table) == colnames(count_matrix_epi) #Test the consistant of epi sample name
+## Creating a DESeqDataSet object
+library(DESeq2)
+#create ddsHTSeq
+ddsHTSeq <- DESeqDataSetFromMatrix( countData = count_matrix_epi,
+                                    colData = sample_epi.table,
+                                    design= ~ Cluster)
+ddsHTSeq
+### Normalization for sequencing depth
+####Pre-filtering and switch factor
+ddsHTSeq <- ddsHTSeq[ rowSums(counts(ddsHTSeq)) >0, ] #removing rows with 0 reads
+ddsHTSeq$Cluster <- factor(ddsHTSeq$Cluster, levels=c("1","2","3")) 
+
+cts <- counts(ddsHTSeq)
+geoMeans <- apply(cts, 1, function(row) exp(sum(log(row[row != 0]))/length(row)))
+dds <- estimateSizeFactors(ddsHTSeq, geoMeans=geoMeans)
+#use above command if below error occur
+#Error in estimateSizeFactorsForMatrix(counts(object), locfunc = locfunc,  : 
+#every gene contains at least one zero, cannot compute log geometric means
+
+#run DESeq
+
+dds <- DESeq(dds)
+
+
+#Extract results
+#For testing at a different threshold, we provide the `alpha` to *results*,
+#so that the mean filtering is optimal for our new FDR threshold.
+
+res_cluster_2vs1 <- results(dds,contrast = c("Cluster","2","1"), alpha=0.5, lfcThreshold=1)
+res_cluster_3vs1 <- results(dds,contrast = c("Cluster","3","1"), alpha=0.5, lfcThreshold=1)
+res_cluster_3vs2 <- results(dds,contrast = c("Cluster","3","2"), alpha=0.5, lfcThreshold=1) # takes long time, don't know why
+res2 <- results(dds, alpha=0.5,lfcThreshold=1)
+
+# Examining results tables and summary
+table(res_cluster_2vs1$padj < 0.1)
+table(res_cluster_3vs1$padj < 0.1)
+table(res_cluster_3vs2$padj < 0.1)
+table(res2$padj < 0.1)
+summary(res_cluster_2vs1)
+summary(res_cluster_3vs1)
+summary(res_cluster_3vs2)
+summary(res2)
+
+
+#Exporting results to CSV files
+
+resO5rdered <- res2[order(res2$padj),]
+resO5rdered <- resO5rdered[complete.cases(resO5rdered),] #remove NA
+res05 <- resO5rdered[resO5rdered$padj<0.05,]
+write.csv(as.data.frame(res05),file="DESeq_result_cluster123.csv")
+#RUN GESA on https://david.ncifcrf.gov/ by uploading g ene names
+
+
+### Visualizing results
+
+#The MA-plot provides a global view of the differential genes, 
+#with the log2 fold change on the y-axis over the mean of normalized counts:
+par(mfrow=c(2,2))
+plotMA(res_cluster_2vs1, ylim=c(-5,5))
+plotMA(res_cluster_3vs1, ylim=c(-5,5))
+plotMA(res_cluster_3vs2, ylim=c(-5,5))
+plotMA(res2, ylim=c(-5,5))
+
+
+#A p-value histogram:
+
+hist(res_cluster_2vs1$pvalue[res_cluster_2vs1$baseMean > 1], 
+     col="grey", border="white", xlab="", ylab="", main="")
+
+
+#Examine the counts for the top gene, sorting by p-value:
+
+par(mfrow=c(1,1))
+par(oma=c(2,2,2,2))
+d <- plotCounts(dds, gene=which.min(res_cluster_2vs1$padj), intgroup="Cluster",
+                returnData=T)
+ggplot(d, aes(x=Cluster, y=count)) +
+        geom_point(position=position_jitter(w=0.2,h=0),size=3)+
+        labs(title = (rownames(dds)[gene]))+
+        theme(axis.text=element_text(size=40),
+              axis.title=element_text(size=40, colour = "black"),
+              plot.title = element_text(hjust = 0.5,size=40,face="bold"))
+
+d <- plotCounts(dds, gene=which(rownames(dds)=="FOS"), intgroup="Cluster",
+                returnData=T)
+ggplot(d, aes(x=Cluster, y=count)) +
+    geom_point(position=position_jitter(w=0.2,h=0),size=3)+
+    labs(title = (rownames(dds)[which(rownames(dds)=="FOS")]))+
+    theme(axis.text=element_text(size=40),
+          axis.title=element_text(size=40, colour = "black"),
+          plot.title = element_text(hjust = 0.5,size=40,face="bold"))
+
+
+#Make normalized counts plots for the top 9 genes:
+par(mfrow=c(3,3))
+for (i in 1:9)  {
+    d <- plotCounts(dds, gene=order(res_cluster_1vs2$padj)[4], intgroup="Cluster",
+                    returnData=T)
+    ggplot(d, aes(x=Cluster, y=count)) +
+        geom_point(position=position_jitter(w=0.2,h=0),size=3)+
+        labs(title = (rownames(dds)[gene]))+
+        theme(axis.text=element_text(size=40),
+              axis.title=element_text(size=40, colour = "black"),
+              plot.title = element_text(hjust = 0.5,size=40,face="bold"))
+}
+#A more sophisticated plot of counts:
+
+library(ggplot2)
+data <- plotCounts(dds, gene=which(rownames(res_cancer)=="SPI1"), intgroup=c("Condition","SPI1"), returnData=TRUE)
+ggplot(data, aes(x=Condition, y=count, col=SPI1,size = SPI1))+
+    geom_point(position=position_jitter(width=.1,height=0))+
+    labs(title = "SPI1 expression level in Healthy vs Cancer group")+
+    theme_bw()+
+    theme(plot.title = element_text(hjust = 0.5),text = element_text(size=40)) + 
+    scale_y_log10()
+
+ggplot(data, aes(x=SPI1, y=count, col=Condition,size = SPI1))+
+    geom_point(position=position_jitter(width=.1,height=0))+
+    labs(title = "SPI1 expression level in unmutated vs mutated group")+
+    theme_bw()+
+    theme(plot.title = element_text(hjust = 0.5),text = element_text(size=40)) + 
+    scale_y_log10()
+
+#A sorted results table:
+
+res_cancer_Sort <- res_cancer[order(res_cancer$padj),]
+head(res_cancer_Sort)
+
+res_SPI1_Sort <- res_SPI1[order(res_SPI1$padj),]
+head(res_SPI1_Sort)
+#A heatmap of the top genes:
+
+library(pheatmap)
+
+topgenes <- head(rownames(res_cancer_Sort),100)
+mat <- assay(vsd)[topgenes,]
+mat <- mat - rowMeans(mat)
+df <- as.data.frame(colData(dds)[,c("Condition","SPI1")])
+pheatmap(mat, annotation_col=df, 
+         fontsize=15,fontsize_row=7,fontsize_col=13,cex=1.05,
+         main ="Top 100 differentially expressed genes between Healthy and Cancer")
+
+topgenes <- head(rownames(res_SPI1_Sort),100)
+mat <- assay(vsd)[topgenes,]
+mat <- mat - rowMeans(mat)
+df <- as.data.frame(colData(dds)[,c("Condition","SPI1")])
+pheatmap(mat, annotation_col=df, 
+         fontsize=15,fontsize_row=7,fontsize_col=13,cex=1.05,
+         main ="Top 100 differentially expressed genes between mutated SPI1 and unmutated SPI1")
