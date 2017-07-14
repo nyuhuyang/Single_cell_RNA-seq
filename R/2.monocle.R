@@ -6,7 +6,7 @@
 # ######################################################################
 
 list.of.cran.packages <- c("VGAM", "irlba", "matrixStats", "igraph", 
-                           "combinat", "fastICA","grid", 
+                           "combinat", "fastICA","grid", "gridExtra",
                            "reshape2", "plyr", "parallel", "methods")
 new.packages <- list.of.cran.packages[!(list.of.cran.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
@@ -18,7 +18,7 @@ new.packages <- list.of.bio.packages[!(list.of.bio.packages %in% installed.packa
 if(length(new.packages)) biocLite(new.packages)
 
 libraries(list.of.bio.packages,list.of.cran.packages)
-memory.limit(size=25000)
+memory.limit(size=65000)
 
 
 # #####################################################################
@@ -27,7 +27,7 @@ memory.limit(size=25000)
 #  https://www.bioconductor.org/packages/devel/bioc/vignettes/monocle/inst/doc/monocle-vignette.pdf
 #
 # ####################################################################
-#====== A-1) Setup enviroment and read data============
+#====== A-1) Setup enviroment and read data (Required)============
 #detect OS and set enviroment
 # load the pipeline data by specifying a pipestance path
 if (Sys.info()[['sysname']]=="Darwin"){
@@ -40,7 +40,7 @@ if (Sys.info()[['sysname']]=="Windows"){
 #count_matrix<-read.csv(paste0(WD,"/Cell_KB-1/outs/sample123.csv"),row.names = 1)
 #dim(count_matrix)
 
-#2.1=======create a CellDataSet object !! from CellRanger GeneBCMatrix====
+#2.1=======create a CellDataSet object (Required) from CellRanger GeneBCMatrix====
 #http://cole-trapnell-lab.github.io/monocle-release/docs/
 gbm_cds <- newCellDataSet(exprs(gbm),
                           phenoData = new("AnnotatedDataFrame", data = pData(gbm)),
@@ -49,11 +49,11 @@ gbm_cds <- newCellDataSet(exprs(gbm),
                           expressionFamily=negbinomial.size())
 colnames(fData(gbm_cds))[2] <-"gene_short_name"
 
-#2.2=================Filtering low-quality cells=======================
+#2.2=================Filtering low-quality cells(Recommended)==================
 gbm_cds <- detectGenes(gbm_cds, min_expr = 0.1)
 print(head(fData(gbm_cds)))
 print(head(pData(gbm_cds)))
-HSMM<-estimateSizeFactors(gbm_cds, locfunc=genefilter::shorth ) # if Size_Factor=NA, there are too many zeroes, 
+gbm_cds<-estimateSizeFactors(gbm_cds, locfunc=genefilter::shorth ) # if Size_Factor=NA, there are too many zeroes, 
 print(head(pData(gbm_cds)))
 expressed_genes <- row.names(subset(fData(gbm_cds), num_cells_expressed >= 10))
 length(expressed_genes)
@@ -73,7 +73,7 @@ qplot(Total_mRNAs, data=pData(gbm_cds), geom="density") +
         geom_vline(xintercept=lower_bound) +
         geom_vline(xintercept=upper_bound)
 
-# 2.3-------Quanlity control--------------------------------------
+# 2.3==============Quanlity control (Recommended)====================================
 # Log-transform each value in the expression matrix.
 L <- log(exprs(gbm_cds)+1)
 # Standardize each gene, so that they are all on the same scale,
@@ -82,10 +82,8 @@ melted_dens_df <- melt(t(scale(t(L))))
 # Plot the distribution of the standardized gene expression values.
 qplot(value, geom="density", data=melted_dens_df) + stat_function(fun = dnorm, size=0.5, color='red') +
         xlab("Standardized log(FPKM)") +
-        ylab("Density")
-#----------------------------------------------------------------
-
-
+        ylab("Density") #Slow.. 
+#===================================================================================
 # #####################################################################
 # 
 #  3. Classifying and counting cells of different types
@@ -94,47 +92,71 @@ qplot(value, geom="density", data=melted_dens_df) + stat_function(fun = dnorm, s
 # ####################################################################
 
 #
-#3.1 Classifying cells with CellTypeHierarchy
-
+#3.1 Classifying cells by type (Recommended)=============================================
 id_ <-function(gene){
     #return gene id
     return(row.names(subset(fData(gbm_cds), gene_short_name == gene)))
 }
 cth <- newCellTypeHierarchy()
 #Epithelial
-#KRT19 - all (majority) of epithelial; + negative for non-epithelial (DCN, PECAM1, LAPTM5, CD68)----------
-cth <- addCellType(cth, "epithelial Cells", classify_func=function(x) {
-    x[id_("KRT19"),] >= 1 &
-    x[id_("DCN"),] == 0 & x[id_("LAPTM5"),] == 0 & x[id_("CD68"),] == 0 })
+#---(Recommended)KRT19 - all (majority) of epithelial; + negative for non-epithelial (DCN, PECAM1, LAPTM5, CD68)----------
+cth <- addCellType(cth, "Epithelial Cells", classify_func=function(x) {
+    x[id_("KRT19"),] >= 1 &  x[id_("DCN"),] == 0 & x[id_("LAPTM5"),] == 0 & x[id_("CD68"),] == 0 })
+
+
 #Non-epithelial structural
-#Stromal+endothelial - GPX3 + negative for leukocyte markers (PTPRC, LAPTM5, SRGN)------------
-#Stromal/fibroblasts - DCN, COL6A1, TIMP3, PDGFRA
-#Endothelial - VWF, EMCN, PECAM1, CDH5
-cth <- addCellType(cth, "Stromal+\nEndothelial+\nFibroblasts Cells", classify_func=function(x) {
-    x[id_("GPX3"),] >= 1 & x[id_("PTPRC"),] == 0 & x[id_("LAPTM5"),] == 0 & x[id_("SRGN"),] == 0  | #Stromal+endothelial
-    x[id_("DCN"),] >= 1 & x[id_("COL6A1"),] >= 1 & x[id_("TIMP3"),] >= 1 & x[id_("PDGFRA"),] >= 1}) #Stromal/fibroblasts
- #subscript out of bounds
-#  x[id_("VWF"),] >= 1 & x[id_("EMCN"),] >= 1 & x[id_("PECAM1"),] >= 1 & x[id_("CDH5"),] >= 1   }) #Endothelial
+#---(Recommended)Stromal+endothelial+fibroblasts - GPX3 + negative for leukocyte markers (PTPRC, LAPTM5, SRGN)------------
+cth <- addCellType(cth, "Stromal Cells+\nEndothelial Cells+\nFibroblasts", classify_func=function(x) {
+        x[id_("GPX3"),] >= 1 & x[id_("PTPRC"),] == 0 & x[id_("LAPTM5"),] == 0 & x[id_("SRGN"),] == 0})
 
+#---Stromal/fibroblasts - DCN, COL6A1, TIMP3, PDGFRA-------
+cth <- addCellType(cth, "Stromal+\nfibroblasts Cells", classify_func=function(x) {
+    x[id_("DCN"),] >= 1 & x[id_("COL6A1"),] >= 1 & x[id_("TIMP3"),] >= 1 & x[id_("PDGFRA"),
+        parent_cell_type_name = "Stromal Cells+\nEndothelial Cells+\nFibroblasts"] >= 1}) #Stromal/fibroblasts
+#---(Recommended)fibroblasts - ANPEP-------
+cth <- addCellType(cth, "Fibroblasts", classify_func=function(x) {
+        x[id_("ANPEP"),] >= 1 },
+        parent_cell_type_name = "Stromal Cells+\nEndothelial Cells+\nFibroblasts") #fibroblasts
 
-#Immune
-#Leukocytes (all)  - PTPRC, LAPTM5, SRGN----------
-#Macrophages - CD68, MARCO, LYZ-------
-#T cells - CD3G
-cth <- addCellType(cth, "Immune Cells", classify_func=function(x) {
-    (x[id_("PTPRC"),] >= 1 | x[id_("LAPTM5"),] >= 1 | x[id_("SRGN"),] >= 1)| #Leukocytes (all)
-    (x[id_("CD68"),] >= 1 & x[id_("MARCO"),] >= 1 & x[id_("LYZ"),] >= 1) }) #Macrophages
-#subscript out of bounds
-#    x[id_("CD3G"),] >= 1   })           #T cells
+#---Stromal/ - MMRN2,CD248------- #Expression of stromal cell markers in distinct compartments of human skin cancers
+cth <- addCellType(cth, "Stromal+ Cells", classify_func=function(x) {
+        x[id_("MMRN2"),] >= 1 & x[id_("CD248"),] >= 1},
+        parent_cell_type_name = "Stromal Cells+\nEndothelial Cells+\nFibroblasts") #Stromal
+
+#----Endothelial - VWF, EMCN, PECAM1, CDH5-------
+cth <- addCellType(cth, "Endothelial Cells", classify_func=function(x) {
+  x[id_("VWF"),] >= 1 & x[id_("EMCN"),] >= 1 & x[id_("CDH5"),] >= 1},
+        parent_cell_type_name = "Stromal+\nEndothelial Cells") #Endothelial
+
+#Immune http://www.abcam.com/primary-antibodies/immune-cell-markers-poster
+#---(Recommended)Leukocytes (all)  - PTPRC, LAPTM5, SRGN----------
+cth <- addCellType(cth, "Leukocytes", classify_func=function(x) {
+        (x[id_("PTPRC"),] >= 1 | x[id_("LAPTM5"),] >= 1 | x[id_("SRGN"),] >= 1)}) #Leukocytes (all)
+                
+#---Macrophages - CD68, MARCO, LYZ-------
+cth <- addCellType(cth, "Macrophages", classify_func=function(x) {
+        (x[id_("CD68"),] >= 1 & x[id_("MARCO"),] >= 1 & x[id_("LYZ"),] >= 1) },
+        parent_cell_type_name = "Leukocytes") #Macrophages
+#---(Recommended)T cells - CD3D-------
+cth <- addCellType(cth, "T cells", classify_func=function(x) {
+    x[id_("CD3D"),] >= 1 },
+    parent_cell_type_name = "Leukocytes") #T cells
+#---(Recommended)Monocytes - CD14-------
+cth <- addCellType(cth, "Monocytes", classify_func=function(x) {
+        x[id_("CD14"),] >= 1 },
+        parent_cell_type_name = "Leukocytes") #Monocytes
+#---Adipocytes---------
+cth <- addCellType(cth, "Beige Adipocytes", classify_func=function(x) {
+        x[id_("TNFRSF9"),] >= 1 & x[id_("TMEM2"),] >= 1}) #Beige Adipocytes
+#===========================================================================
 
 HSMM <- classifyCells(gbm_cds, cth, 0.1)
 #Error in if (type_res[cell_name] == TRUE) next_nodes <- c(next_nodes,  : 
 #missing value where TRUE/FALSE needed
 #check id_("") exist or not
-
 table(pData(HSMM)$CellType)
 
-#Pie
+# generate Pie
 
 pie <- ggplot(pData(HSMM), aes(x = factor(1), fill = factor(CellType))) + geom_bar(width = 1)
 
@@ -144,7 +166,14 @@ pie + coord_polar(theta = "y") +theme(axis.title.x=element_blank(),
                                       text = element_text(size=30),
                                       legend.text = element_text(size=20))
 
-#3.2 Unsupervised cell clustering
+#generate table
+cellType.table <- read.delim("CellType2.txt") #previously as
+ss <- tableGrob(cellType.table) #library(gridExtra)
+grid.arrange(ss)
+
+#3.2 Unsupervised cell clustering(Alternative)========================
+#Clustering cells without marker genes
+
 #We can filter genes based on average expression level, and we can additionally select genes
 #that are unusually variable across cells. These genes tend to be highly informative about cell state.
 #estimateDispersions only makes sense right now for negbinomial and negbinomial.size expression families.
@@ -153,12 +182,35 @@ disp_table <- dispersionTable(HSMM)
 unsup_clustering_genes <- subset(disp_table, mean_expression >= 0.1)
 HSMM <- setOrderingFilter(HSMM, unsup_clustering_genes$gene_id)
 plot_ordering_genes(HSMM)
-
-HSMM <- reduceDimension(HSMM, max_components=2, num_dim = 6,
+#Now we're ready to try clustering the cells:
+HSMM_1 <- reduceDimension(HSMM, max_components=2, num_dim = 6,
                         reduction_method = 'tSNE', verbose = T)
-HSMM <- clusterCells(HSMM, num_clusters=2)
-plot_cell_clusters(HSMM, 1, 2, color="CellType", markers=c("KRT19", "SRGN"))
-#3.3 Semi-supervised cell clustering with known marker genes
+HSMM_1 <- clusterCells(HSMM_1, num_clusters=9)  # increase num_clusters for cell trajectories analysis
+plot_cell_clusters(HSMM_1, 1, 2, color="CellType") +
+        theme(text = element_text(size=20),
+              legend.justification = 'right', 
+              legend.position=c(0.20,0.78))+ 
+        guides(colour = guide_legend(override.aes = list(size=9)))
+#here can test sets of markers
+plot_cell_clusters(HSMM_1, 1,2, color="CellType", markers=c("CD14","ANPEP","CD3G","KRT19"))+
+        theme(text = element_text(size=30),
+              legend.position="right",
+              legend.key.width = unit(2, "cm"))+ 
+        guides(colour = guide_legend(override.aes = list(size=10)))
+#Monocle allows us to subtract the effects of "uninteresting" sources of variation
+#to reduce their impact on the clustering.
+HSMM_1 <- clusterCells(HSMM_1, num_clusters=2)
+#All_Cell_Cluster 
+plot_cell_clusters(HSMM_1, 1, 2, color="CellType") +
+        theme(text = element_text(size=40),
+              legend.position="none")+ 
+        guides(colour = guide_legend(override.aes = list(size=10)))+
+        facet_wrap(~Cluster)
+
+
+
+#3.3 Clustering cells using marker genes(Recommended)========================
+#Semi-supervised cell clustering with known marker genes
 #Before we just picked genes that were highly expressed and highly variable.
 #Now, we'll pick genes that co-vary with our markers.
 #In a sense, we will be building a large list of genes to use as markers,
@@ -166,7 +218,7 @@ plot_cell_clusters(HSMM, 1, 2, color="CellType", markers=c("KRT19", "SRGN"))
 
 #It then removes all the "Unknown"and "Ambiguous" functions before identifying genes that are differentially expressed between the types.
 
-marker_diff <- markerDiffTable(HSMM[expressed_genes,], 
+marker_diff <- markerDiffTable(HSMM_1[expressed_genes,], 
                                cth,
                                residualModelFormulaStr="~num_genes_expressed", # obtain 0 genes using ~CellType, there is no cluster yet
                                cores=1) #Long cth will trigure "subscript out of bounds". It takes long time.
@@ -186,35 +238,36 @@ selectTopMarkers(marker_spec, 3)
 
 #To cluster the cells, we'll choose the top 500 markers for each of these cell types:
 semisup_clustering_genes <- unique(selectTopMarkers(marker_spec, 500)$gene_id)
-HSMM_3 <- setOrderingFilter(HSMM, semisup_clustering_genes)
-plot_ordering_genes(HSMM_3)
-HSMM_3 <- reduceDimension(HSMM_3, max_components=2, num_dim = 6, reduction_method = 'tSNE',
+HSMM_2 <- setOrderingFilter(HSMM, semisup_clustering_genes)
+plot_ordering_genes(HSMM_2)
+HSMM_2 <- reduceDimension(HSMM_2, max_components=2, num_dim = 6, reduction_method = 'tSNE',
                         residualModelFormulaStr="~num_genes_expressed", verbose = T)
-HSMM_3 <- clusterCells(HSMM_3, num_clusters=10) # increase num_clusters from 3 to 10 for cell trajectories analysis
-plot_cell_clusters(HSMM_3, 1, 2, color="CellType")
+HSMM_2 <- clusterCells(HSMM_2, num_clusters=10) # increase num_clusters from 3 to 10 for cell trajectories analysis
+plot_cell_clusters(HSMM_2, 1, 2, color="CellType")
 
 
 #3.4 Imputing cell type
-#we've reduce the number of "contaminating" Endo Cells in the Epithelial cluster, and vice versa.
+#we've reduce the number of "contaminating" Cells.
 #what about the "Unknown" cells?
 #When a cluster is composed of more than a certain percentage (in this case, 10%) of a certain type,
 #all the cells in the cluster are set to that type.
 #If a cluster is composed of more than one cell type, the whole thing is marked "Ambiguous".
 #If there's no cell type thats above the threshold, the cluster is marked "Unknown"
-suppressWarnings(HSMM_3 <- clusterCells(HSMM_3,
+suppressWarnings(HSMM_2 <- clusterCells(HSMM_1,
                      num_clusters=10,
-                     frequency_thresh=0.45, #Original frequency_thresh=0.1 {0.4,0.52}
+                     frequency_thresh=0.4, #Original frequency_thresh=0.1 {0.4,0.52}
                      cell_type_hierarchy=cth))
-table(pData(HSMM_3)$CellType)  
+table(pData(HSMM_2)$CellType)
 
 #To control the order and color, change the factor levels to (Epi,Endo, Immune)
-pData(HSMM_3)$CellType <-factor(pData(HSMM_3)$CellType,levels=c("KRT19+ epithelial Cells",
-                                                                "Stromal+\nEndothelial+\nFibroblasts Cells",
-                                                                "Immune Cells"))
+#???pData(HSMM_2)$CellType <-factor(pData(HSMM_2)$CellType,levels=c("Fibroblasts",
+#                                                                "Stromal Cells+\nEndothelial Cells",
+#                                                                "Myeloid cells",
+#                                                                "Monocytes"))
 
 #Pie
 
-pie <- ggplot(pData(HSMM_3), aes(x = factor(1), fill = factor(CellType))) + geom_bar(width = 1)
+pie <- ggplot(pData(HSMM_2), aes(x = factor(1), fill = factor(CellType))) + geom_bar(width = 1)
 
 pie + coord_polar(theta = "y") +theme(axis.title.x=element_blank(), 
                                       axis.title.y=element_blank(),
@@ -224,39 +277,32 @@ pie + coord_polar(theta = "y") +theme(axis.title.x=element_blank(),
 
 
 #All_Cell_Cluster: 
-plot_cell_clusters(HSMM_3, 1, 2, color="CellType") +
+plot_cell_clusters(HSMM_2, 1, 2, color="CellType") +
     theme(text = element_text(size=40),
           legend.justification = 'right', 
-          legend.position=c(0.75,0.82),
-          legend.key.height = grid::unit(1, "in"))+ 
+          legend.position=c(0.28,0.86),
+          legend.key.height = grid::unit(0.8, "in"))+ 
     guides(colour = guide_legend(override.aes = list(size=10)))
 
 #Each_Cell_Cluster
-plot_cell_clusters(HSMM_3, 1, 2, color="CellType") +facet_wrap(~CellType)+ 
+plot_cell_clusters(HSMM_2, 1, 2, color="CellType") +facet_wrap(~CellType)+ 
     theme(text = element_text(size=40),
           legend.justification = 'right', 
-          legend.position=c(0.7,0.7),
-          legend.key.width = grid::unit(1, "in"))+ 
+          legend.position=c(0.35,0.2),
+          legend.key.width = grid::unit(0.8, "in"))+ 
     guides(colour = guide_legend(override.aes = list(size=10)))
 
-#Marker genes level in three Cell types 
-plot_cell_clusters(HSMM_3, 1,2, color="CellType", markers=c("SRGN","KRT19","GPX3"))+
+#Marker genes level in two Cell types 
+plot_cell_clusters(HSMM_2, 1,2, color="CellType", markers=c("SRGN","DCN"))+
     theme(text = element_text(size=35),
           legend.text = element_text(size=30))+
     guides(colour = guide_legend(override.aes = list(size=10)))
 
-#Marker genes level in Epithelial Cells 
-plot_cell_clusters(HSMM_3, 1,2, color="CellType", markers=c("KRT19","KRT5","MUC1","SCGB3A2","SCGB1A1","SCGB3A1","SFTPB","FOXJ1"))+
-    theme(text = element_text(size=50),
-          legend.justification = 'right', 
-          legend.position=c(1.0,-0.1),
-          legend.key.height = grid::unit(0.5, "in"))+ 
-    guides(colour = guide_legend(override.aes = list(size=10)))
 
 
-#Finally, we subset the CellDataSet object to create HSMM_epi, 
+#Finally, we subset the CellDataSet object to create HSMM_immue, 
 #which includes only myoblasts. We'll use this in the
-HSMM_epi <- HSMM_3[,pData(HSMM_3)$CellType == "KRT19+ epithelial Cells"]
+HSMM_epi <- HSMM_2[,pData(HSMM_2)$CellType == "KRT19+ epithelial Cells"]
 HSMM_epi <- estimateDispersions(HSMM_epi)
 
 #4 Constructing single cell trajectories
