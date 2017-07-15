@@ -97,6 +97,11 @@ id_ <-function(gene){
     #return gene id
     return(row.names(subset(fData(gbm_cds), gene_short_name == gene)))
 }
+#----------------back up scripts--------
+#fData(gbm_cds)[id_(""),]
+#----------------back up script--------
+
+
 cth <- newCellTypeHierarchy()
 #Epithelial
 #---(Recommended)KRT19 - all (majority) of epithelial; + negative for non-epithelial (DCN, PECAM1, LAPTM5, CD68)----------
@@ -105,9 +110,9 @@ cth <- addCellType(cth, "Epithelial Cells", classify_func=function(x) {
 
 
 #Non-epithelial structural
-#---(Recommended)Stromal+endothelial+fibroblasts - GPX3 + negative for leukocyte markers (PTPRC, LAPTM5, SRGN)------------
+#---(Recommended)Strocthmal+endothelial+fibroblasts - GPX3 + negative for leukocyte markers (PTPRC, LAPTM5, SRGN)------------
 cth <- addCellType(cth, "Stromal Cells+\nEndothelial Cells+\nFibroblasts", classify_func=function(x) {
-        x[id_("GPX3"),] >= 1 & x[id_("PTPRC"),] == 0 & x[id_("LAPTM5"),] == 0 & x[id_("SRGN"),] == 0})
+        x[id_("GPX3"),] >= 1 & x[id_("PTPRC"),] == 0 & x[id_("LAPTM5"),] == 0 & x[id_("SRGN"),] == 0}) #Non-epithelial
 
 #---Stromal/fibroblasts - DCN, COL6A1, TIMP3, PDGFRA-------
 cth <- addCellType(cth, "Stromal+\nfibroblasts Cells", classify_func=function(x) {
@@ -126,7 +131,7 @@ cth <- addCellType(cth, "Stromal+ Cells", classify_func=function(x) {
 #----Endothelial - VWF, EMCN, PECAM1, CDH5-------
 cth <- addCellType(cth, "Endothelial Cells", classify_func=function(x) {
   x[id_("VWF"),] >= 1 & x[id_("EMCN"),] >= 1 & x[id_("CDH5"),] >= 1},
-        parent_cell_type_name = "Stromal+\nEndothelial Cells") #Endothelial
+        parent_cell_type_name = "Stromal Cells+\nEndothelial Cells+\nFibroblasts") #Endothelial
 
 #Immune http://www.abcam.com/primary-antibodies/immune-cell-markers-poster
 #---(Recommended)Leukocytes (all)  - PTPRC, LAPTM5, SRGN----------
@@ -141,10 +146,25 @@ cth <- addCellType(cth, "Macrophages", classify_func=function(x) {
 cth <- addCellType(cth, "T cells", classify_func=function(x) {
     x[id_("CD3D"),] >= 1 },
     parent_cell_type_name = "Leukocytes") #T cells
+#---B cells - CD19+,CD20+  -------
+cth <- addCellType(cth, "B cells", classify_func=function(x) {
+        x[id_("CD19"),] >= 1 & x[id_("MS4A1"),] >= 1},
+        parent_cell_type_name = "Leukocytes") #B cells
 #---(Recommended)Monocytes - CD14-------
 cth <- addCellType(cth, "Monocytes", classify_func=function(x) {
         x[id_("CD14"),] >= 1 },
         parent_cell_type_name = "Leukocytes") #Monocytes
+#---NK Cells - CD3G(-)NCAM1(+)KLRD1(+)NCR1(+)-------
+cth <- addCellType(cth, "NK Cells", classify_func=function(x) {
+        x[id_("KLRD1"),] >= 1 & x[id_("CD3G"),] ==0},
+        parent_cell_type_name = "Leukocytes") #Monocytes
+
+#---(Recommended)Neutrophil - ITGAM(+)FCGR3A(+)ITGB2(+)CD44(+)CD55(+)-------
+cth <- addCellType(cth, "Neutrophil", classify_func=function(x) {
+        x[id_("ITGAM"),] >= 1 & x[id_("FCGR3A"),] >= 1 & x[id_("ITGB2"),] >= 1 &
+         x[id_("CD44"),] >= 1 & x[id_("CD55"),] >= 1},
+        parent_cell_type_name = "Leukocytes") #Monocytes
+
 #---Adipocytes---------
 cth <- addCellType(cth, "Beige Adipocytes", classify_func=function(x) {
         x[id_("TNFRSF9"),] >= 1 & x[id_("TMEM2"),] >= 1}) #Beige Adipocytes
@@ -167,7 +187,7 @@ pie + coord_polar(theta = "y") +theme(axis.title.x=element_blank(),
                                       legend.text = element_text(size=20))
 
 #generate table
-cellType.table <- read.delim("CellType2.txt") #previously as
+cellType.table <- read.delim("CellType.txt") #previously as
 ss <- tableGrob(cellType.table) #library(gridExtra)
 grid.arrange(ss)
 
@@ -185,14 +205,16 @@ plot_ordering_genes(HSMM)
 #Now we're ready to try clustering the cells:
 HSMM_1 <- reduceDimension(HSMM, max_components=2, num_dim = 6,
                         reduction_method = 'tSNE', verbose = T)
+#error if DDTree; reduced dimension space doesn't match the dimension of the CellDataSet object
+
 HSMM_1 <- clusterCells(HSMM_1, num_clusters=9)  # increase num_clusters for cell trajectories analysis
-plot_cell_clusters(HSMM_1, 1, 2, color="CellType") +
+plot_cell_clusters(HSMM_1, 1, 2, color="Cluster") +
         theme(text = element_text(size=20),
               legend.justification = 'right', 
-              legend.position=c(0.20,0.78))+ 
+              legend.position=c(0.8,0.78))+ 
         guides(colour = guide_legend(override.aes = list(size=9)))
 #here can test sets of markers
-plot_cell_clusters(HSMM_1, 1,2, color="CellType", markers=c("CD14","ANPEP","CD3G","KRT19"))+
+plot_cell_clusters(HSMM_1, 1,2, color="CellType", markers=c("ANPEP","CD14","CD3G","KRT19"))+
         theme(text = element_text(size=30),
               legend.position="right",
               legend.key.width = unit(2, "cm"))+ 
@@ -205,11 +227,11 @@ plot_cell_clusters(HSMM_1, 1, 2, color="CellType") +
         theme(text = element_text(size=40),
               legend.position="none")+ 
         guides(colour = guide_legend(override.aes = list(size=10)))+
-        facet_wrap(~Cluster)
+        facet_wrap(~CellType)
 
 
 
-#3.3 Clustering cells using marker genes(Recommended)========================
+#3.3 Clustering cells using marker genes(Alternative,so slow)-----------------
 #Semi-supervised cell clustering with known marker genes
 #Before we just picked genes that were highly expressed and highly variable.
 #Now, we'll pick genes that co-vary with our markers.
@@ -246,28 +268,30 @@ HSMM_2 <- clusterCells(HSMM_2, num_clusters=10) # increase num_clusters from 3 t
 plot_cell_clusters(HSMM_2, 1, 2, color="CellType")
 
 
-#3.4 Imputing cell type
+#3.4 Imputing cell type(Recommended)==================================
 #we've reduce the number of "contaminating" Cells.
 #what about the "Unknown" cells?
 #When a cluster is composed of more than a certain percentage (in this case, 10%) of a certain type,
 #all the cells in the cluster are set to that type.
 #If a cluster is composed of more than one cell type, the whole thing is marked "Ambiguous".
 #If there's no cell type thats above the threshold, the cluster is marked "Unknown"
-suppressWarnings(HSMM_2 <- clusterCells(HSMM_1,
-                     num_clusters=10,
-                     frequency_thresh=0.4, #Original frequency_thresh=0.1 {0.4,0.52}
+suppressWarnings(HSMM_3 <- clusterCells(HSMM_1,
+                     num_clusters=15,
+                     frequency_thresh=0.4, #Original frequency_thresh=0.1 {0.3,0.45}
                      cell_type_hierarchy=cth))
-table(pData(HSMM_2)$CellType)
+pData(HSMM_3)$CellType
 
-#To control the order and color, change the factor levels to (Epi,Endo, Immune)
-#???pData(HSMM_2)$CellType <-factor(pData(HSMM_2)$CellType,levels=c("Fibroblasts",
-#                                                                "Stromal Cells+\nEndothelial Cells",
-#                                                                "Myeloid cells",
-#                                                                "Monocytes"))
+#-----test script----------------------------
+i=0.1;while(i<1){suppressWarnings(HSMM_3 <- clusterCells(HSMM_1,
+                                                         num_clusters=15,
+                                                         frequency_thresh=i, #Original frequency_thresh=0.1 {0.4,0.52}
+                                                         cell_type_hierarchy=cth))
+        print(table(pData(HSMM_3)$CellType));print(i);i=i+0.05}
+#-----------------------
 
 #Pie
 
-pie <- ggplot(pData(HSMM_2), aes(x = factor(1), fill = factor(CellType))) + geom_bar(width = 1)
+pie <- ggplot(pData(HSMM_3), aes(x = factor(1), fill = factor(CellType))) + geom_bar(width = 1)
 
 pie + coord_polar(theta = "y") +theme(axis.title.x=element_blank(), 
                                       axis.title.y=element_blank(),
@@ -277,15 +301,15 @@ pie + coord_polar(theta = "y") +theme(axis.title.x=element_blank(),
 
 
 #All_Cell_Cluster: 
-plot_cell_clusters(HSMM_2, 1, 2, color="CellType") +
-    theme(text = element_text(size=40),
+plot_cell_clusters(HSMM_3, 1, 2, color="CellType") +
+    theme(text = element_text(size=30),
           legend.justification = 'right', 
-          legend.position=c(0.28,0.86),
-          legend.key.height = grid::unit(0.8, "in"))+ 
-    guides(colour = guide_legend(override.aes = list(size=10)))
+          legend.position=c(0.32,0.80),
+          legend.key.height = grid::unit(0.5, "in"))+ 
+    guides(colour = guide_legend(override.aes = list(size=8)))
 
 #Each_Cell_Cluster
-plot_cell_clusters(HSMM_2, 1, 2, color="CellType") +facet_wrap(~CellType)+ 
+plot_cell_clusters(HSMM_3, 1, 2, color="CellType") +facet_wrap(~CellType)+ 
     theme(text = element_text(size=40),
           legend.justification = 'right', 
           legend.position=c(0.35,0.2),
@@ -293,7 +317,7 @@ plot_cell_clusters(HSMM_2, 1, 2, color="CellType") +facet_wrap(~CellType)+
     guides(colour = guide_legend(override.aes = list(size=10)))
 
 #Marker genes level in two Cell types 
-plot_cell_clusters(HSMM_2, 1,2, color="CellType", markers=c("SRGN","DCN"))+
+plot_cell_clusters(HSMM_3, 1,2, color="CellType", markers=c("SRGN","DCN"))+
     theme(text = element_text(size=35),
           legend.text = element_text(size=30))+
     guides(colour = guide_legend(override.aes = list(size=10)))
@@ -302,12 +326,21 @@ plot_cell_clusters(HSMM_2, 1,2, color="CellType", markers=c("SRGN","DCN"))+
 
 #Finally, we subset the CellDataSet object to create HSMM_immue, 
 #which includes only myoblasts. We'll use this in the
-HSMM_epi <- HSMM_2[,pData(HSMM_2)$CellType == "KRT19+ epithelial Cells"]
-HSMM_epi <- estimateDispersions(HSMM_epi)
+HSMM_Leu <- HSMM_3[,pData(HSMM_3)$CellType == "Leukocytes"]
+HSMM_Leu <- estimateDispersions(HSMM_Leu)
 
-#4 Constructing single cell trajectories
+
+# #####################################################################
+# 
+#  4. Constructing single cell trajectories
+#  https://www.bioconductor.org/packages/devel/bioc/vignettes/monocle/inst/doc/monocle-vignette.pdf
+#
+# ####################################################################
+
+##The ordering workflow
+# Step 0: Prepare data ================================================
 #4.3 Unsupervised ordering
-table(pData(HSMM_epi)$Cluster)
+table(pData(HSMM_Leu)$Cluster)
 #what if we don't have time series data?
 #Below are two methods to select genes that require no knowledge of the design of the experiment at all.
 
@@ -317,34 +350,35 @@ table(pData(HSMM_epi)$Cluster)
 
 #4.4 Unsupervised feature selection based on density peak clustering
 #To use dpFeature, we firrst select superset of feature genes as genes expressed in at least 5% of all the cells.
-HSMM_epi_3 <- detectGenes(HSMM_epi, min_expr=0.1)
-fData(HSMM_epi_3)$use_for_ordering <- fData(HSMM_epi_3)$num_cells_expressed > 0.05 * ncol(HSMM_epi_3)
-plot_ordering_genes(HSMM_epi_3)
+HSMM_Leu_3 <- detectGenes(HSMM_Leu, min_expr=0.1)
+fData(HSMM_Leu_3)$use_for_ordering <- fData(HSMM_Leu_3)$num_cells_expressed > 0.05 * ncol(HSMM_Leu_3)
+plot_ordering_genes(HSMM_Leu_3)
 
 #We will then run reduceDimension with t-SNE as the reduction method on those top PCs and project them further
 #down to two dimensions.
-HSMM_epi_3 <- reduceDimension(HSMM_epi_3, max_components=2, norm_method = 'log', num_dim = 6,
+HSMM_Leu_3 <- reduceDimension(HSMM_Leu_3, max_components=2, norm_method = 'log', num_dim = 6,
                              reduction_method = 'tSNE', verbose = T)
 #Then we can run density peak clustering to identify the clusters on the 2-D t-SNE space.
-HSMM_epi_3 <- clusterCells(HSMM_epi_3, verbose = F)
+HSMM_Leu_3 <- clusterCells(HSMM_Leu_3, verbose = F)
 
 #To control the order and color, change the cluster levels from 1,2,3 to 1,3,2
-pData(HSMM_epi_3)$Cluster <-factor(pData(HSMM_epi_3)$Cluster,levels=c("1","3","2"))
+table(pData(HSMM_Leu_3)$Cluster)
+#pData(HSMM_Leu_3)$Cluster <-factor(pData(HSMM_Leu_3)$Cluster,levels=c("1","3","2"))
 
 #After the clustering, we can check the clustering results.
 
-plot_cell_clusters(HSMM_epi_3, 1,2, color='Cluster', markers=c("KRT19","KRT5","MUC1","SCGB3A2","SCGB1A1","SCGB3A1","SFTPB","FOXJ1"))+
+plot_cell_clusters(HSMM_Leu_3, 1,2, color='Cluster', markers=c("CD3G","CD14","FCGR3A","ITGAX"))+
     theme(text = element_text(size=50),
           legend.justification = 'right', 
-          legend.position=c(1.0,-0.15),
+          legend.position="none",
           legend.key.height = grid::unit(0.5, "in"))+ 
     guides(colour = guide_legend(override.aes = list(size=10)))
 
 #We also provide the decision plot for users to check the p; b for each cell and decide the threshold for defining the cell clusters.
-#skip plot_rho_delta(HSMM_epi_3, rho_threshold = 2, delta_threshold = 4 )+
+#skip plot_rho_delta(HSMM_Leu_3, rho_threshold = 2, delta_threshold = 4 )+
 #skip     theme(text = element_text(size=50))
 
-#skip HSMM_epi_3 <- clusterCells(HSMM_epi_3,
+#skip HSMM_Leu_3 <- clusterCells(HSMM_Leu_3,
 #skip                          rho_threshold = 2,
 #skip                          delta_threshold = 4,
 #skip                          skip_rho_sigma = T,
@@ -354,55 +388,64 @@ plot_cell_clusters(HSMM_epi_3, 1,2, color='Cluster', markers=c("KRT19","KRT5","M
 
 #After we confirm the clustering makes sense, 
 #we can then perform differential gene expression test as a way to extract the genes that distinguish them.
-HSMM_expressed_genes <- row.names(subset(fData(HSMM_epi_3), num_cells_expressed >= 10))
-clustering_DEG_genes <- differentialGeneTest(HSMM_epi_3[HSMM_expressed_genes,],
+
+#==Trajectory step 1: choose genes that define a cell's progress=======================
+
+#choose less genes for differential gene tst
+HSMM_expressed_genes <- row.names(subset(fData(HSMM_Leu_3), num_cells_expressed >= 10))
+length(HSMM_expressed_genes)
+clustering_DEG_genes <- differentialGeneTest(HSMM_Leu_3[HSMM_expressed_genes,],
                                              fullModelFormulaStr = '~Cluster',
                                              cores = 1) #takes long time
 #We will then select the top 1000 significant genes as the ordering genes.
 HSMM_ordering_genes <- row.names(clustering_DEG_genes)[order(clustering_DEG_genes$qval)][1:1000]
-plot_ordering_genes(HSMM_epi_3)
-HSMM_epi_3 <- setOrderingFilter(HSMM_epi_3, ordering_genes = HSMM_ordering_genes)
-HSMM_epi_3 <- reduceDimension(HSMM_epi_3)
-HSMM_epi_3 <- orderCells(HSMM_epi_3)
+plot_ordering_genes(HSMM_Leu_3)
+HSMM_Leu_3 <- setOrderingFilter(HSMM_Leu_3, ordering_genes = HSMM_ordering_genes)
+
+#==Trajectory step 2: reduce data dimensionality==========================
+HSMM_Leu_3 <- reduceDimension(HSMM_Leu_3)
+#===Trajectory step 3: order cells along the trajectory=================
+HSMM_Leu_3 <- orderCells(HSMM_Leu_3)
 GM_state <- function(cds){
     if (length(unique(pData(cds)$State)) > 1){
         T0_counts <- table(pData(cds)$State, pData(cds)$Pseudotime)[,"0"] # replace $Hours with $Pseudotime
         return(as.numeric(names(T0_counts)[which(T0_counts == max(T0_counts))]))
     }else { return (1) }
 }
-HSMM_epi_3 <- orderCells(HSMM_epi_3, root_state=GM_state(HSMM_epi_3))
-saveRDS(HSMM_epi_3,file="HSMM_epi_3") #save HSMM_epi_3 for other applications, like shiny
-plot_cell_trajectory(HSMM_epi_3, color_by="State")+
+HSMM_Leu_3 <- orderCells(HSMM_Leu_3, root_state=GM_state(HSMM_Leu_3))
+write.csv(clustering_DEG_genes,"clustering_DEG_genes.csv")
+saveRDS(HSMM_Leu_3,file="HSMM_Leu_3") #save HSMM_Leu_3 for other applications, like shiny
+plot_cell_trajectory(HSMM_Leu_3, color_by="State")+
     theme(text = element_text(size=40))+
     guides(colour = guide_legend(override.aes = list(size=10)))
 
-plot_cell_trajectory(HSMM_epi_3, color_by="Cluster")+
+plot_cell_trajectory(HSMM_Leu_3, color_by="Cluster")+
     theme(text = element_text(size=40))+
     guides(colour = guide_legend(override.aes = list(size=10)))
 
-plot_cell_trajectory(HSMM_epi_3, color_by="Pseudotime")+
+plot_cell_trajectory(HSMM_Leu_3, color_by="Pseudotime")+
     theme(text = element_text(size=40))+
     guides(colour = guide_legend(override.aes = list(size=10)))
 
-plot_cell_trajectory(HSMM_epi_3, color_by="Cluster") + facet_wrap(~State, nrow=1)
+plot_cell_trajectory(HSMM_Leu_3, color_by="Cluster") + facet_wrap(~State, nrow=1)
 
 #We can check the final state results as following:
-plot_cell_clusters(HSMM_epi_3, 1,2, color="Cluster", markers=HSMM_ordering_genes[1:15])+
+plot_cell_clusters(HSMM_Leu_3, 1,2, color="Cluster", markers=HSMM_ordering_genes[1:15])+
     theme(text = element_text(size=30),
           legend.key.height = grid::unit(0.75, "in"),
           legend.justification = 'right', 
-          legend.position=c(1.0,-0.15))+
+          legend.position=c(1.0,0.3))+
     guides(colour = guide_legend(override.aes = list(size=10)))
 
 
-plot_genes_branched_pseudotime(HSMM_epi_3[HSMM_ordering_genes[1:15],],
+plot_genes_branched_pseudotime(HSMM_Leu_3[HSMM_ordering_genes[1:16],],
 #                               branch_point=1,
                                color_by="Cluster",
                                ncol=4)+
     theme(text = element_text(size=30),
           legend.key.height = grid::unit(0.75, "in"),
           legend.justification = 'right', 
-          legend.position=c(0.9,-0.05))+
+                  legend.position=c(1.2,-0.05))+
     guides(colour = guide_legend(override.aes = list(size=10)))
 
 
@@ -411,16 +454,16 @@ plot_genes_branched_pseudotime(HSMM_epi_3[HSMM_ordering_genes[1:15],],
 #5.1 Basic differential analysis
 #5.2 Finding genes that distinguish cell type or state
 
-#to_be_tested <- row.names(subset(fData(HSMM_epi_3),
+#to_be_tested <- row.names(subset(fData(HSMM_Leu_3),
 #                                 gene_short_name %in% c("SCGB3A2","CXCL8","HSPA5",
 #                                                        "SCGB3A1","FOS","RRAD","ANXA1",
 #                                                        "EGR1","ID1","AHR","TP53BP2",
 #                                                        "JUN","NEDD4L","STK17A","EMP2")))
-#diff_test_res <- differentialGeneTest(HSMM_epi_3[to_be_tested,],
+#diff_test_res <- differentialGeneTest(HSMM_Leu_3[to_be_tested,],
 #                                      fullModelFormulaStr="~Cluster")
 #skip diff_test_res <- subset(diff_test_res, qval < 0.1)
 #diff_test_res[,c("gene_short_name", "pval", "qval")]
-plot_genes_jitter(HSMM_epi_3[HSMM_ordering_genes[1:15],], grouping="Cluster", color_by="Cluster",
+plot_genes_jitter(HSMM_Leu_3[HSMM_ordering_genes[1:15],], grouping="Cluster", color_by="Cluster",
                   nrow=4, ncol=NULL, plot_trend=TRUE)+
     theme(text = element_text(size=30),
           legend.key.height = grid::unit(0.75, "in"),
@@ -431,21 +474,21 @@ plot_genes_jitter(HSMM_epi_3[HSMM_ordering_genes[1:15],], grouping="Cluster", co
 
 
 #5.3 Finding genes that change as a function of pseudotime
-marker_genes <- row.names(subset(fData(HSMM_epi_3),
+marker_genes <- row.names(subset(fData(HSMM_Leu_3),
           gene_short_name %in% c("SCGB1A1","SCGB3A2","CXCL8","HSPA5",
                                             "SCGB3A1","FOS","RRAD","ANXA1",
                                          "EGR1","ID1","AHR","TP53BP2",
                                          "JUN","NEDD4L","STK17A","EMP2")))
 #5.4 Clustering genes by pseudotemporal expression pattern
-diff_test_res <- differentialGeneTest(HSMM_epi_3[marker_genes,],
+diff_test_res <- differentialGeneTest(HSMM_Leu_3[marker_genes,],
                                       fullModelFormulaStr="~sm.ns(Pseudotime)")
 sig_gene_names <- row.names(subset(diff_test_res, qval < 0.1)) #Don't remove this
-plot_pseudotime_heatmap(HSMM_epi_3[sig_gene_names,],
+plot_pseudotime_heatmap(HSMM_Leu_3[sig_gene_names,],
                         num_clusters = 3,
                         cores = 1,
                         show_rownames = T,
                         return_heatmap= T)
-plot_genes_branched_pseudotime(HSMM_epi_3[Epi_subtype_gene,],
+plot_genes_branched_pseudotime(HSMM_Leu_3[Epi_subtype_gene,],
                                #                               branch_point=1,
                                color_by="Cluster",
                                ncol=2)+
@@ -456,26 +499,26 @@ plot_genes_branched_pseudotime(HSMM_epi_3[Epi_subtype_gene,],
 
 #6 Analyzing branches in single-cell trajectories
 
-plot_cell_trajectory(HSMM_epi_3, color_by="Pseudotime")
+plot_cell_trajectory(HSMM_Leu_3, color_by="Pseudotime")
 
 #BEAM takes as input a CellDataSet that's been ordered with orderCells and the name of a branch point in
 #the trajectory. It returns a table of significance scores for each gene. 
 #Genes that score significant are said to be branch-dependent in their expression.
 
-HSMM_epi_3_res <- BEAM(HSMM_epi_3, branch_point=1, cores = 1) #It takes long long time
-BEAM_res<-HSMM_epi_3_res
+HSMM_Leu_3_res <- BEAM(HSMM_Leu_3, branch_point=1, cores = 1) #It takes long long time
+BEAM_res<-HSMM_Leu_3_res
 BEAM_res <- BEAM_res[order(BEAM_res$qval),]
 BEAM_res <- BEAM_res[,c("gene_short_name", "pval", "qval")]
 #You can visualize changes for all the genes that are significantly branch dependent using a special type of heatmap.
-plot_genes_branched_heatmap(HSMM_epi_3[row.names(subset(BEAM_res, qval < 1e-4)),],
+plot_genes_branched_heatmap(HSMM_Leu_3[row.names(subset(BEAM_res, qval < 1e-4)),],
                             branch_point = 1,
                             num_clusters = 2,
                             cores = 1,
                             use_gene_short_name = T,
                             show_rownames = T)
 #We can plot a couple of these genes, such as Pdpn and Sftpb
-HSMM_epi_genes <- row.names(subset(fData(HSMM_epi_3), gene_short_name %in% c("HSPA6", "BAG3")))
-plot_genes_branched_pseudotime(HSMM_epi_3[HSMM_epi_genes,],
+HSMM_Leu_genes <- row.names(subset(fData(HSMM_Leu_3), gene_short_name %in% c("HSPA6", "BAG3")))
+plot_genes_branched_pseudotime(HSMM_Leu_3[HSMM_Leu_genes,],
                                branch_point=1,
                                color_by="Pseudotime",
                                ncol=1)
