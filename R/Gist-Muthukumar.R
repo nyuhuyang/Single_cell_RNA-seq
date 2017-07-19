@@ -1,7 +1,3 @@
-
-
-
-
 #generate table in R markdown
 cellType.table <- read.delim("CellType.txt")
 kable(cellType.table, captioin ="Cell Type")
@@ -26,4 +22,17 @@ grid.arrange(ss)
 
 #2017-07-14
 #try NK cells and other myloide cells
+
+#CD3G(-),NCAM1(+),KLRD1 (+),NCR1(+)	, CD3-, CD56+, CD94+, NKp46+
+        
 #assaign each cluster to cell type
+
+#2017-07-18
+#FlowJo pineer in single cell level clustering using machine learning
+#k-means clustering, tsne 
+#http://www.the-scientist.com/?articles.view/articleNo/49228/title/Picking-Out-Patterns/
+
+#https://followthedata.wordpress.com/2015/12/21/list-of-deep-learning-implementations-in-biology/
+ADAGE #Analysis using Denoising Autoencoders for Gene Expression 
+#https://github.com/greenelab/adage
+
