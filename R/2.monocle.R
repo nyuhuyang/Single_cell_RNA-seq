@@ -13,7 +13,7 @@ if(length(new.packages)) install.packages(new.packages)
 library(easypackages)
 
 source("https://bioconductor.org/biocLite.R")
-list.of.bio.packages <- c("DDRTree", "monocle")
+list.of.bio.packages <- c("DDRTree", "monocle","edgeR")
 new.packages <- list.of.bio.packages[!(list.of.bio.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) biocLite(new.packages)
 
@@ -49,7 +49,18 @@ gbm_cds <- newCellDataSet(exprs(gbm),
                           expressionFamily=negbinomial.size())
 colnames(fData(gbm_cds))[2] <-"gene_short_name"
 
-#2.2=================Filtering low-quality cells(Recommended)==================
+#2.2=================Filtering low-quality data(Recommended)==================
+#Run quanlity control with boxplot
+par(oma=c(3,3,3,3))  # all sides have 3 lines of space
+par(mar=c(2,2,2,2))
+counts<- as.matrix(exprs(gbm))
+logcounts <- cpm(counts,log=TRUE)
+
+boxplot(logcounts[,1:100],xlab="",cex=1, cex.axis=0.5, 
+        ylab = "log (base 10) counts + 1",
+        main="boxplot for first 100 scRNA-seq before filtering",las=2)
+
+# filtering low-quality genes
 gbm_cds <- detectGenes(gbm_cds, min_expr = 0.1)
 print(head(fData(gbm_cds)))
 print(head(pData(gbm_cds)))
@@ -57,13 +68,15 @@ gbm_cds<-estimateSizeFactors(gbm_cds, locfunc=genefilter::shorth ) # if Size_Fac
 print(head(pData(gbm_cds)))
 expressed_genes <- row.names(subset(fData(gbm_cds), num_cells_expressed >= 10))
 length(expressed_genes)
+
 gbm_cds<-gbm_cds[expressed_genes,]
-#
+
 
 #If you are using RPC values to measure expresion, 
 #as we are in this vignette, it's also good to look at the distribution
 #of mRNA totals across the cells:
 pData(gbm_cds)$Total_mRNAs <- Matrix::colSums(exprs(gbm_cds))
+# filtering low-quality cells
 gbm_cds <- gbm_cds[,pData(gbm_cds)$Total_mRNAs < 1e6]
 upper_bound <- 10^(mean(log10(pData(gbm_cds)$Total_mRNAs)) + 2*sd(log10(pData(gbm_cds)$Total_mRNAs)))
 lower_bound <- 10^(mean(log10(pData(gbm_cds)$Total_mRNAs)) - 2*sd(log10(pData(gbm_cds)$Total_mRNAs)))
@@ -73,7 +86,14 @@ qplot(Total_mRNAs, data=pData(gbm_cds), geom="density") +
         geom_vline(xintercept=lower_bound) +
         geom_vline(xintercept=upper_bound)
 
-# 2.3==============Quanlity control (Recommended)====================================
+counts<- as.matrix(exprs(gbm_cds))
+logcounts <- cpm(counts,log=TRUE)
+
+boxplot(logcounts[,1:100],xlab="",cex=1, cex.axis=0.5, 
+        ylab = "log (base 10) counts + 1",
+        main="boxplot for first 100 scRNA-seq after filtering",las=2)
+
+# 2.3---------------Quanlity control (Recommended)--------------------
 # Log-transform each value in the expression matrix.
 L <- log(exprs(gbm_cds)+1)
 # Standardize each gene, so that they are all on the same scale,
@@ -83,7 +103,7 @@ melted_dens_df <- melt(t(scale(t(L))))
 qplot(value, geom="density", data=melted_dens_df) + stat_function(fun = dnorm, size=0.5, color='red') +
         xlab("Standardized log(FPKM)") +
         ylab("Density") #Slow.. 
-#===================================================================================
+#-----------------------------------------------------------------------
 # #####################################################################
 # 
 #  3. Classifying and counting cells of different types
@@ -134,36 +154,41 @@ cth <- addCellType(cth, "Endothelial Cells", classify_func=function(x) {
         parent_cell_type_name = "Stromal Cells+\nEndothelial Cells+\nFibroblasts") #Endothelial
 
 #Immune http://www.abcam.com/primary-antibodies/immune-cell-markers-poster
+#https://en.wikipedia.org/wiki/Cluster_of_differentiation
 #---(Recommended)Leukocytes (all)  - PTPRC, LAPTM5, SRGN----------
 cth <- addCellType(cth, "Leukocytes", classify_func=function(x) {
         (x[id_("PTPRC"),] >= 1 | x[id_("LAPTM5"),] >= 1 | x[id_("SRGN"),] >= 1)}) #Leukocytes (all)
-                
-#---Macrophages - CD68, MARCO, LYZ-------
-cth <- addCellType(cth, "Macrophages", classify_func=function(x) {
-        (x[id_("CD68"),] >= 1 & x[id_("MARCO"),] >= 1 & x[id_("LYZ"),] >= 1) },
-        parent_cell_type_name = "Leukocytes") #Macrophages
+#---(Recommended)Granulocyte CD11b, CD15+, CD24+, CD114+, CD182+ ----------
+cth <- addCellType(cth, "Granulocyte", classify_func=function(x) {
+        x[id_("FUT4"),] >= 1 | x[id_("CSF3R"),] >= 1 },
+        parent_cell_type_name = "Leukocytes") #Leukocytes (all)
+
 #---(Recommended)T cells - CD3D-------
 cth <- addCellType(cth, "T cells", classify_func=function(x) {
     x[id_("CD3D"),] >= 1 },
     parent_cell_type_name = "Leukocytes") #T cells
-#---B cells - CD19+,CD20+  -------
+#---(no) B cells - CD19+,CD20+  -------
 cth <- addCellType(cth, "B cells", classify_func=function(x) {
         x[id_("CD19"),] >= 1 & x[id_("MS4A1"),] >= 1},
         parent_cell_type_name = "Leukocytes") #B cells
-#---(Recommended)Monocytes - CD14-------
+#---(Recommended)Monocytes - CD14,CD114-------
 cth <- addCellType(cth, "Monocytes", classify_func=function(x) {
-        x[id_("CD14"),] >= 1 },
-        parent_cell_type_name = "Leukocytes") #Monocytes
+        x[id_("CD14"),] >= 1 &x[id_("CSF3R"),] >= 1 },
+        parent_cell_type_name = "Granulocyte") #Monocytes
 #---NK Cells - CD3G(-)NCAM1(+)KLRD1(+)NCR1(+)-------
 cth <- addCellType(cth, "NK Cells", classify_func=function(x) {
         x[id_("KLRD1"),] >= 1 & x[id_("CD3G"),] ==0},
         parent_cell_type_name = "Leukocytes") #Monocytes
 
-#---(Recommended)Neutrophil - ITGAM(+)FCGR3A(+)ITGB2(+)CD44(+)CD55(+)-------
+#---Neutrophil - ITGAM(+)FCGR3A(+)ITGB2(+)CD44(+)CD55(+)-------
 cth <- addCellType(cth, "Neutrophil", classify_func=function(x) {
         x[id_("ITGAM"),] >= 1 & x[id_("FCGR3A"),] >= 1 & x[id_("ITGB2"),] >= 1 &
          x[id_("CD44"),] >= 1 & x[id_("CD55"),] >= 1},
-        parent_cell_type_name = "Leukocytes") #Monocytes
+        parent_cell_type_name = "Granulocyte") #Monocytes
+#---Macrophages - CD68, MARCO, LYZ-------
+cth <- addCellType(cth, "Macrophages", classify_func=function(x) {
+        (x[id_("CD68"),] >= 1 & x[id_("MARCO"),] >= 1 & x[id_("LYZ"),] >= 1) },
+        parent_cell_type_name = "Leukocytes") #Macrophages
 
 #---Adipocytes---------
 cth <- addCellType(cth, "Beige Adipocytes", classify_func=function(x) {
@@ -208,11 +233,11 @@ HSMM_1 <- reduceDimension(HSMM, max_components=2, num_dim = 6,
 #error if DDTree; reduced dimension space doesn't match the dimension of the CellDataSet object
 
 HSMM_1 <- clusterCells(HSMM_1, num_clusters=9)  # increase num_clusters for cell trajectories analysis
-plot_cell_clusters(HSMM_1, 1, 2, color="Cluster") +
-        theme(text = element_text(size=20),
+plot_cell_clusters(HSMM_1, 1, 2, color="CellType") +
+        theme(text = element_text(size=18),
               legend.justification = 'right', 
-              legend.position=c(0.8,0.78))+ 
-        guides(colour = guide_legend(override.aes = list(size=9)))
+              legend.position=c(0.14,0.78))+ 
+        guides(colour = guide_legend(override.aes = list(size=5)))
 #here can test sets of markers
 plot_cell_clusters(HSMM_1, 1,2, color="CellType", markers=c("ANPEP","CD14","CD3G","KRT19"))+
         theme(text = element_text(size=30),
@@ -279,7 +304,7 @@ suppressWarnings(HSMM_3 <- clusterCells(HSMM_1,
                      num_clusters=15,
                      frequency_thresh=0.4, #Original frequency_thresh=0.1 {0.3,0.45}
                      cell_type_hierarchy=cth))
-pData(HSMM_3)$CellType
+(pData(HSMM_3)$CellType)
 
 #-----test script----------------------------
 i=0.1;while(i<1){suppressWarnings(HSMM_3 <- clusterCells(HSMM_1,
@@ -304,7 +329,7 @@ pie + coord_polar(theta = "y") +theme(axis.title.x=element_blank(),
 plot_cell_clusters(HSMM_3, 1, 2, color="CellType") +
     theme(text = element_text(size=30),
           legend.justification = 'right', 
-          legend.position=c(0.32,0.80),
+          legend.position=c(0.30,0.80),
           legend.key.height = grid::unit(0.5, "in"))+ 
     guides(colour = guide_legend(override.aes = list(size=8)))
 
@@ -312,7 +337,7 @@ plot_cell_clusters(HSMM_3, 1, 2, color="CellType") +
 plot_cell_clusters(HSMM_3, 1, 2, color="CellType") +facet_wrap(~CellType)+ 
     theme(text = element_text(size=40),
           legend.justification = 'right', 
-          legend.position=c(0.35,0.2),
+          legend.position=c(0.32,0.2),
           legend.key.width = grid::unit(0.8, "in"))+ 
     guides(colour = guide_legend(override.aes = list(size=10)))
 

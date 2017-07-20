@@ -71,7 +71,7 @@ visualize_umi_counts(gbm_log,tsne_proj[c("TSNE.1","TSNE.2")],
 #
 # ####################################################################
 
-genes <- c("CD79A", "NKG7", "CD3D", "CST3","CD8A","PF4")
+genes <- c("KRT19", "GPX3", "CD3G", "ANPEP","PTPRC","CD14")
 tsne_proj <- analysis_results$tsne
 visualize_gene_markers(gbm_log,genes,tsne_proj[c("TSNE.1","TSNE.2")],limits=c(0,1.5))
 
