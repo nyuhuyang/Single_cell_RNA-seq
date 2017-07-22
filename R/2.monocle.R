@@ -23,11 +23,11 @@ memory.limit(size=65000)
 
 # #####################################################################
 # 
-#  2.a Load and normalize data
+#  2. Load and normalize data
 #  https://www.bioconductor.org/packages/devel/bioc/vignettes/monocle/inst/doc/monocle-vignette.pdf
 #
 # ####################################################################
-#====== A-1) Setup enviroment and read data (Required)============
+#====== 2.0 Setup enviroment and read data (Required)============
 #detect OS and set enviroment
 # load the pipeline data by specifying a pipestance path
 if (Sys.info()[['sysname']]=="Darwin"){
@@ -42,6 +42,8 @@ if (Sys.info()[['sysname']]=="Windows"){
 
 #2.1=======create a CellDataSet object (Required) from CellRanger GeneBCMatrix====
 #http://cole-trapnell-lab.github.io/monocle-release/docs/
+gbm <- readRDS("gbm")
+
 gbm_cds <- newCellDataSet(exprs(gbm),
                           phenoData = new("AnnotatedDataFrame", data = pData(gbm)),
                           featureData = new("AnnotatedDataFrame", data = fData(gbm)),
@@ -50,15 +52,17 @@ gbm_cds <- newCellDataSet(exprs(gbm),
 colnames(fData(gbm_cds))[2] <-"gene_short_name"
 
 #2.2=================Filtering low-quality data(Recommended)==================
-#Run quanlity control with boxplot
-par(oma=c(3,3,3,3))  # all sides have 3 lines of space
-par(mar=c(2,2,2,2))
-counts<- as.matrix(exprs(gbm))
-logcounts <- cpm(counts,log=TRUE)
 
-boxplot(logcounts[,1:100],xlab="",cex=1, cex.axis=0.5, 
-        ylab = "log (base 10) counts + 1",
-        main="boxplot for first 100 scRNA-seq before filtering",las=2)
+#=====QC===================
+dim(gbm_cds)
+counts_per_cell<- colSums(exprs(gbm_cds)) # mean count per cell
+genes_per_cell <- apply(exprs(gbm_cds), 2, function(c)sum(c!=0)) # mean gene per cell
+mean(counts_per_cell)
+median(genes_per_cell)
+qplot(counts_per_cell, data=pData(gbm_cds), geom="density")+coord_cartesian(xlim = c(0, 30000))
+qplot(genes_per_cell, data=pData(gbm_cds), geom="density")+coord_cartesian(xlim = c(0, 10000))
+qplot(counts_per_cell,genes_per_cell, data=pData(gbm_cds))
+#============================================================================
 
 # filtering low-quality genes
 gbm_cds <- detectGenes(gbm_cds, min_expr = 0.1)
@@ -86,6 +90,7 @@ qplot(Total_mRNAs, data=pData(gbm_cds), geom="density") +
         geom_vline(xintercept=lower_bound) +
         geom_vline(xintercept=upper_bound)
 
+#Run quanlity control with boxplot----------------------------
 counts<- as.matrix(exprs(gbm_cds))
 logcounts <- cpm(counts,log=TRUE)
 

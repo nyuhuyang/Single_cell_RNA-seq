@@ -11,25 +11,27 @@
 #  0 check and install all cran and bioconductor packages if necessary
 # 
 # ######################################################################
-
+#source("http://cf.10xgenomics.com/supp/cell-exp/rkit-install-1.1.0.R")
 library(cellrangerRkit)
 
 memory.limit(size=25000)
 
 # #####################################################################
 # 
-#  1.a Load and normalize data
+#  1 Load and normalize data
 #  http://cf.10xgenomics.com/supp/cell-exp/cellrangerrkit-PBMC-vignette-knitr-1.1.0.pdf
 #
 # ####################################################################
 
-# load the pipeline data by specifying a pipestance path
+# =========1.1 load the pipeline data by specifying a pipestance path (Required)====
 if (Sys.info()[['sysname']]=="Darwin"){
         WD <- "/Users/yah2014/Dropbox/Public/Olivier/R/Muthukumar_Single_Cell"
         setwd(WD);getwd();list.files()}
 if (Sys.info()[['sysname']]=="Windows"){
         WD <- "C:/Users/User/Dropbox/Public/Olivier/R/Muthukumar_Single_Cell"
         setwd(WD);getwd();list.files()}
+
+# ----------1.2 load gbm (Alternative)---------------------------------------------------
 gbm <- load_cellranger_matrix(paste0(WD,"/Cell_KB-1"))
 analysis_results <- load_cellranger_analysis_results(paste0(WD,"/Cell_KB-1"))
 
@@ -38,6 +40,23 @@ analysis_results <- load_cellranger_analysis_results(paste0(WD,"/Cell_KB-1"))
 dim(exprs(gbm)) # expression matrix
 fData(gbm) # data frame of genes
 pData(gbm) # data frame of cell barcodes
+saveRDS(gbm,file="gbm")
+
+# =========1.1 Load gbm (Recommended)=========================================================
+gbm <- readRDS("gbm")
+
+
+#=====QC (Recommended) ======================================
+anyNA(exprs(gbm))
+dim(gbm)
+counts_per_cell<- colSums(exprs(gbm)) # mean count per cell
+genes_per_cell <- apply(exprs(gbm), 2, function(c)sum(c!=0)) # mean gene per cell
+mean(counts_per_cell)
+median(genes_per_cell)
+qplot(counts_per_cell, data=pData(gbm), geom="density")+coord_cartesian(xlim = c(0, 30000))
+qplot(genes_per_cell, data=pData(gbm), geom="density")+scale_x_continuous(limits = c(0, 10000))
+qplot(counts_per_cell,genes_per_cell, data=pData(gbm))
+#============================================================================
 
 #The variable analysis_results contains pre-computed results for 
 #principle component analysis (PCA) dimensional reduction, 
@@ -67,7 +86,7 @@ visualize_umi_counts(gbm_log,tsne_proj[c("TSNE.1","TSNE.2")],
 
 # #####################################################################
 #  
-# 1. b Visualizing signatures of known gene markers
+# 1. 2 Visualizing signatures of known gene markers
 #
 # ####################################################################
 
@@ -81,7 +100,7 @@ visualize_gene_markers(gbm_log,genes,tsne_proj[c("TSNE.1","TSNE.2")],limits=c(0,
 
 # #####################################################################
 #  
-# 1. c Unbiased analysis using clustering results
+# 1. 3 Unbiased analysis using clustering results
 #
 # ####################################################################
 #=======3.1 Visualizing clustering results==========================
