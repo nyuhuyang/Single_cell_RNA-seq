@@ -21,7 +21,7 @@ if(length(new.packages)) install.packages(new.packages)
 #workflowInstall("simpleSingleCell")
 
 source("https://bioconductor.org/biocLite.R")
-list.of.bio.packages <- c("scater","org.Mm.eg.db")
+list.of.bio.packages <- c("scater","org.Hs.eg.db","scran")
 new.packages <- list.of.bio.packages[!(list.of.bio.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) biocLite(new.packages)
 library(easypackages)
@@ -72,9 +72,11 @@ setSpike(sce) <- "ERCC"
 # expressed features (genes per cell) = the number of features with non-zero counts
 #  Cells with small library sizes and few expressed genes are like to be of poor quality.
 par(mfrow=c(1,2))
-hist(sce1$total_counts/1e3, xlab="Library sizes (thousands)", main="", 
+
+
+hist(sce$total_counts/1e3, xlab="Library sizes (thousands)", main="", 
      breaks=30, col="grey80", ylab="Number of cells")
-hist(sce1$total_features, xlab="Number of expressed genes", main="", 
+hist(sce$total_features, xlab="Number of expressed genes", main="", 
      breaks=30, col="grey80", ylab="Number of cells")
 #remove cells with log-library sizes that are more than 3 median absolute deviations (MADs)
 #below the median log-library size.
@@ -91,7 +93,14 @@ sce <- sce[,!(libsize.drop | feature.drop )]#subsetting by column
 dim(sce)
 data.frame(ByLibSize=sum(libsize.drop), ByFeature=sum(feature.drop),
            Remaining=ncol(sce))
+hist(sce$total_counts/1e3, xlab="Library sizes (thousands)", main="", 
+     breaks=30, col="grey80", ylab="Number of cells")
+hist(sce$total_features, xlab="Number of expressed genes", main="", 
+     breaks=30, col="grey80", ylab="Number of cells")
+mean(sce$total_counts)
+median(sce$total_features)
 
+qplot(sce$total_counts,sce$total_features)
 
 #-------QC on mt- & ERCC (Alternative)-----------------------------------------
 par(mfrow=c(1,2))
@@ -127,21 +136,84 @@ plotPCA(sce, pca_data_input="pdata") + fontsize +
 #  C. Classification of cell cycle phase
 # 
 # ######################################################################
-
-anno <- select(org.Mm.eg.db, keys=rownames(sce), keytype="SYMBOL", column="ENSEMBL")
-ensembl <- anno$ENSEMBL[match(rownames(sce), anno$SYMBOL)]
-assignments <- cyclone(sce, mm.pairs, gene.names=ensembl)
+hm.pairs <- readRDS(system.file("exdata", "human_cycle_markers.rds", package="scran"))
+anno <- select(org.Hs.eg.db, keys=as.character(fData(sce)$Gene), keytype="SYMBOL", column="ENSEMBL")
+#try to construct anno by sce
+#anno <- data.frame(SYMBOL= fData(sce)$Gene, ENSEMBL =rownames(fData(sce)) )
+ensembl <- anno$ENSEMBL[match(fData(sce)$Gene, anno$SYMBOL)]
+assignments <- cyclone(exprs(sce), hm.pairs, gene.names=ensembl) # takes long time
+par(mfrow=c(1,1))
 plot(assignments$score$G1, assignments$score$G2M, xlab="G1 score", ylab="G2/M score", pch=16)
+# G1 phase <- (G1>0.5 & G1> G2/M)
+sce_G1 <- sce[,assignments$phases=="G1"]
+# G2/M phase <- (G2/M >0.5 & G2/M >G1)
+# s phase <- (G1 <= 0.5 & G2/M <= 0.5)
 
+########################################################################
+#
+#  D. Filtering out low-abundance genes
+# 
+# ######################################################################
+#low-abundance genes = an average count below a filter threshold of 1
+ave.counts <- calcAverage(sce)
+keep <- ave.counts >= 0.01
+sum(keep)
+par(mfrow=c(1,1))
+hist(log10(ave.counts), breaks=100, main="", col="grey80",
+     xlab=expression(Log[10]~"average count for each gene"))
+abline(v=log10(1), col="blue", lwd=2, lty=2)
+abline(v=log10(0.01), col="red", lwd=2, lty=2)
 
+#highly expressed genes Figure, 
+#should generally be dominated by constitutively expressed transcripts
+#such as those for ribosomal or mitochondrial proteins. 
+fontsize <- theme(axis.text=element_text(size=12), 
+                  axis.title=element_text(size=16),
+                  plot.title = element_text(size=22))
+plotQC(sce, type = "highest-expression", n=50) + fontsize
+plotHighestExprs(sce)
+#In general, we prefer the mean-based filter as it tends to be less aggressive.
+sce <- sce[keep,] 
+#-----select non-zero counts genes at least n cells (Alternative)-------------
+numcells <- nexprs(sce, byrow=TRUE)
+alt.keep <- numcells >= 10
+sum(alt.keep)
+smoothScatter(log10(ave.counts), numcells, xlab=expression(Log[10]~"average count"), 
+              ylab="Number of expressing cells")
+is.ercc <- isSpike(sce, type="ERCC")
+points(log10(ave.counts[is.ercc]), numcells[is.ercc], col="red", pch=16, cex=0.5)
+########################################################################
+#
+#  E. Normalization of cell-specific biases
+# 
+# ######################################################################
+# Using the deconvolution method to deal with zero counts
+sce <- computeSumFactors(sce, sizes=seq(20, 80, 5))
+summary(sizeFactors(sce))
+plot(sizeFactors(sce), sce$total_counts/1e3, log="xy",
+     ylab="Library size (thousands)", xlab="Size factor")
+# Computing separate size factors for spike-in transcripts
+sce <- computeSpikeFactors(sce, type="ERCC", general.use=FALSE)
+#Applying the size factors to normalize gene expression
+sce <- normalize(sce)
+plot(sizeFactors(sce), colSums(exprs(sce))/1e3, log="xy",
+     ylab="Library size (thousands)", xlab="Size factor")
 
+#---Checking for important technical factors(Alternative)-----
+plotExplanatoryVariables(sce, variables=c("counts_feature_controls_ERCC", 
+                                          "log10_counts_feature_controls_ERCC")) + fontsize
 
+########################################################################
+#
+#  E. Identifying highly variable genes from the normalized log-expression
+# 
+# ######################################################################
+var.fit <- trendVar(sce, trend="loess", use.spikes=FALSE, span=0.2)
+var.out <- decomposeVar(sce, var.fit)
 
-
-
-
-
-
-
-
-
+plot(var.out$mean, var.out$total, pch=16, cex=0.6, xlab="Mean log-expression", 
+     ylab="Variance of log-expression")
+o <- order(var.out$mean)
+lines(var.out$mean[o], var.out$tech[o], col="dodgerblue", lwd=2)
+cur.spike <- isSpike(sce)
+points(var.out$mean[cur.spike], var.out$total[cur.spike], col="red", pch=16)
