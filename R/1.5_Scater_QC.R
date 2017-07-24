@@ -39,39 +39,38 @@ if (Sys.info()[['sysname']]=="Windows"){
 
 ##------1.5.1 quickstart (Alternative)--------------------------
 gbm <- readRDS("gbm")
-gbm <-gbm[1:2000,1:40]
 ## form an SCESet object
 pd <- new("AnnotatedDataFrame", data = pData(gbm))
 rownames(pd) <- pd$barcode
-gbm_sceset <- newSCESet(countData = exprs(gbm), phenoData = pd)
+sce <- newSCESet(countData = exprs(gbm), phenoData = pd)
 
 ## filter no exprs
-keep_feature <- rowSums(exprs(gbm_sceset) > 0) > 0
-gbm_sceset <- gbm_sceset[keep_feature,]
+keep_feature <- rowSums(exprs(sce) > 0) > 0
+sce <- sce[keep_feature,]
 
 ## quick start, eval=FALSE
-gbm_sceset <- calculateQCMetrics(gbm_sceset, feature_controls = 1:40)
+sce <- calculateQCMetrics(sce, feature_controls = 1:40)
 
 
-scater_gui(gbm_sceset) #quick-start-gui
+scater_gui(sce) #quick-start-gui
 ##-----------------------------------------------------------------------------
 
 
 ## ====1.5.2 sceset make sceset counts only (Recommended)==========================
 gbm <- readRDS("gbm")
-gbm <-gbm[1:2000,1:40]
 pd <- new("AnnotatedDataFrame", data = pData(gbm))
 rownames(pd) <- pd$barcode
 gene_df <- data.frame(Gene = fData(gbm)$symbol)
 rownames(gene_df) <- rownames(exprs(gbm))
 fd <- new("AnnotatedDataFrame", data = gene_df)
-gbm_sceset <- newSCESet(countData = exprs(gbm), phenoData = pd,
+sce <- newSCESet(countData = exprs(gbm), phenoData = pd,
                             featureData = fd)
-gbm_sceset
+sce
+dim(sce)
 ## ==========================================================================
 
 ## ----1.5.3 sceset make sceset exprs only (Alternative, practise)-----------------------------------------
-example2 <- newSCESet(exprsData = log2(calculateCPM(gbm_sceset) + 1))
+example2 <- newSCESet(exprsData = log2(calculateCPM(sce) + 1))
 pData(example2) ## data frame with 0 columns and 1883 rows
 fData(example2) ## data frame with 0 columns and 32738 rows
 
@@ -86,12 +85,12 @@ exprs(example2)[1:10, 1:3]
 #Typically these should be log2(counts-per-million) values or 
 #log2(reads-per-kilobase-per-million-mapped), appropriately normalised.
 
-get_exprs(gbm_sceset, "counts")[1:10, 1:3]
+get_exprs(sce, "counts")[1:10, 1:3]
 # access any assay data from the object with the get_exprs function.
 
 ## add some count data to SCESet if necessary
-set_exprs(example2, "counts") <- counts(gbm_sceset)
-counts(example2) <- get_exprs(gbm_sceset, "counts")
+set_exprs(example2, "counts") <- counts(sce)
+counts(example2) <- get_exprs(sce, "counts")
 example2
 counts(example2)[1:10, 1:3]
 
@@ -100,26 +99,26 @@ gene_df <- data.frame(Gene = rownames(exprs(gbm)))
 rownames(gene_df) <- gene_df$Gene
 fd <- new("AnnotatedDataFrame", data = gene_df)
 ## replace featureData
-fData(gbm_sceset) <- fd
+fData(sce) <- fd
 ## replace phenotype data
-pData(gbm_sceset) <- pd
+pData(sce) <- pd
 ## replace expression data to be used
-exprs(gbm_sceset) <- log2(calculateCPM(gbm_sceset) + 1)
+exprs(sce) <- log2(calculateCPM(sce) + 1)
 
 
 ## ----1.5.4  Plots of expression values (Alternative, practise)-----------------
 ## plot sceset blocking
 #plot shows the cumulative proportion across the top 500 features
-plot(gbm_sceset, block1 = "Mutation_Status", block2 = "Treatment",
+plot(sce, block1 = "Mutation_Status", block2 = "Treatment",
      colour_by = "Cell_Cycle", nfeatures = 300, exprs_values = "counts")
 
 ## plot expression
 # plotexpression function plot xpression values for a subset of genes or features
-plotExpression(gbm_sceset, rownames(gbm_sceset)[1:6],
+plotExpression(sce, rownames(sce)[1:6],
                x = "Mutation_Status", exprs_values = "exprs", colour = "Treatment")
 
 ## plot expression theme bw
-plotExpression(gbm_sceset, rownames(gbm_sceset)[7:12],
+plotExpression(sce, rownames(sce)[7:12],
                x = "Mutation_Status", exprs_values = "counts", colour = "Cell_Cycle",
                show_median = TRUE, show_violin = FALSE,  xlab = "Mutation Status",
                log = TRUE)
@@ -140,155 +139,155 @@ plotExpression(gbm_sceset, rownames(gbm_sceset)[7:12],
 # 3.QC of experimental variables
 
 ## 1.6.1 calc QCmetrics
-gbm_sceset <- calculateQCMetrics(gbm_sceset, feature_controls = 1:20)
-varLabels(gbm_sceset)  #list-pata-qc
-names(fData(gbm_sceset)) #list-fdata-qc
+sce <- calculateQCMetrics(sce, feature_controls = 1:20)
+varLabels(sce)  #list-pata-qc
+names(fData(sce)) #list-fdata-qc
 #=============================================
 
 ## calc-qc-metrics multi feature controls(Alternative)-------------------------
 #More than one set of feature controls can be defined if desired.
-gbm_sceset <- calculateQCMetrics(
-        gbm_sceset, feature_controls = list(controls1 = 1:20, controls2 = 500:1000),
+sce <- calculateQCMetrics(
+        sce, feature_controls = list(controls1 = 1:20, controls2 = 500:1000),
         cell_controls = list(set_1 = 1:5, set_2 = 31:40))
-varLabels(gbm_sceset)
+varLabels(sce)
 
 
 ## 1.6.2 QC and filtering of features(Recommended)======================================
 #filtering out unwanted features, with very low overall expression
 
 # plot-qc-expression, fig.height=7.5, fig.width=8.5
-keep_feature <- rowSums(counts(gbm_sceset) > 0) > 4
-gbm_sceset <- gbm_sceset[keep_feature,]
+keep_feature <- rowSums(counts(sce) > 0) > 4
+sce <- sce[keep_feature,]
 ## Plot QC
-plotQC(gbm_sceset, type = "highest-expression", exprs_values = "counts")
+plotQC(sce, type = "highest-expression", exprs_values = "counts")
 
 ## ----plot-qc-expression-cell-controls(Alternative)---------------------------------
-p1 <- plotQC(gbm_sceset[, !gbm_sceset$is_cell_control],
+p1 <- plotQC(sce[, !sce$is_cell_control],
              type = "highest-expression")
-p2 <- plotQC(gbm_sceset[, gbm_sceset$is_cell_control],
+p2 <- plotQC(sce[, sce$is_cell_control],
              type = "highest-expression")
 multiplot(p1, p2, cols = 2)
 
 ## plot-qc-exprs-freq-vs-mean-default(Recommended)=====
-plotQC(gbm_sceset, type = "exprs-freq-vs-mean")
+plotQC(sce, type = "exprs-freq-vs-mean")
 
 ## -plot-qc-exprs-mean-vs-freq-defined-feature-set(Alternative)------
-feature_set_1 <- fData(gbm_sceset)$is_feature_control_controls1
-plotQC(gbm_sceset, type = "exprs-freq-vs-mean", feature_set = feature_set_1)
+feature_set_1 <- fData(sce)$is_feature_control_controls1
+plotQC(sce, type = "exprs-freq-vs-mean", feature_set = feature_set_1)
 
 ## plot-fdata(Recommended)===
-plotFeatureData(gbm_sceset, aes(x = n_cells_exprs, y = pct_total_counts))
+plotFeatureData(sce, aes(x = n_cells_exprs, y = pct_total_counts))
 
 ## 1.6.3 QC and filtering of cells ======================================
 ## plot-pdata
-plotPhenoData(gbm_sceset, aes(x = total_counts, y = total_features,
+plotPhenoData(sce, aes(x = total_counts, y = total_features,
                                   colour = Mutation_Status))
 
 ## ----plot-pdata-cont-col, fig.show = TRUE----------------------------------
-plotPhenoData(gbm_sceset, aes(x = Mutation_Status, y = total_features,
+plotPhenoData(sce, aes(x = Mutation_Status, y = total_features,
                                   colour = log10_total_counts))
 
 ## ----plot-pdata-col-gene-exprs---------------------------------------------
-plotPhenoData(gbm_sceset, aes(x = total_counts, y = total_features,
+plotPhenoData(sce, aes(x = total_counts, y = total_features,
                                   colour = Gene_1000))
 
 ## ----plot-pdatacol-gene-exprs-2, fig.show = FALSE--------------------------
-plotPhenoData(gbm_sceset, aes(x = pct_counts_feature_controls,
+plotPhenoData(sce, aes(x = pct_counts_feature_controls,
                                   y = total_features, colour = Gene_0500))
 
 ## ----plot-pdatacol-gene-exprs-3, fig.show = FALSE--------------------------
-plotPhenoData(gbm_sceset, aes(x = pct_counts_feature_controls,
+plotPhenoData(sce, aes(x = pct_counts_feature_controls,
                                   y = pct_counts_top_50_features,
                                   colour = Gene_0001))
 
 ## ----plot-pdata-pct-exprs-controls-----------------------------------------
-plotPhenoData(gbm_sceset, aes(x = total_features,
+plotPhenoData(sce, aes(x = total_features,
                                   y = pct_counts_feature_controls,
                                   colour = Mutation_Status)) +
         theme(legend.position = "top") +
         stat_smooth(method = "lm", se = FALSE, size = 2, fullrange = TRUE)
 
 ## ----plot-pca-default------------------------------------------------------
-plotPCA(gbm_sceset)
+plotPCA(sce)
 
 ## ----plot-pca-cpm, eval=FALSE----------------------------------------------
-#  plotPCA(gbm_sceset, exprs_values = "cpm")
+#  plotPCA(sce, exprs_values = "cpm")
 
 ## ----plot-pca-feature-controls, fig.show = FALSE---------------------------
-plotPCA(gbm_sceset, feature_set = fData(gbm_sceset)$is_feature_control)
+plotPCA(sce, feature_set = fData(sce)$is_feature_control)
 
 ## ----plot-pca-4comp-colby-shapeby, fig.height=5.5--------------------------
-plotPCA(gbm_sceset, ncomponents = 4, colour_by = "Treatment",
+plotPCA(sce, ncomponents = 4, colour_by = "Treatment",
         shape_by = "Mutation_Status")
 
 ## ----plot-pca-4comp-colby-sizeby-exprs, fig.height=5.5---------------------
-plotPCA(gbm_sceset, colour_by = "Gene_0001", size_by = "Gene_1000")
+plotPCA(sce, colour_by = "Gene_0001", size_by = "Gene_1000")
 
 ## ----plot-tsne-1comp-colby-sizeby-exprs, fig.height=5.5--------------------
-plotTSNE(gbm_sceset, colour_by = "Gene_0001", size_by = "Gene_1000")
+plotTSNE(sce, colour_by = "Gene_0001", size_by = "Gene_1000")
 
 ## ----plot-difmap-1comp-colby-sizeby-exprs, fig.height=5.5------------------
-plotDiffusionMap(gbm_sceset, colour_by = "Gene_0001", size_by = "Gene_1000")
+plotDiffusionMap(sce, colour_by = "Gene_0001", size_by = "Gene_1000")
 
 ## ----plot-pca-4comp-colby-shapeby-save-pcs, fig.show = FALSE---------------
-gbm_sceset <- plotPCA(gbm_sceset, ncomponents = 4,
+sce <- plotPCA(sce, ncomponents = 4,
                           colour_by = "Treatment", shape_by = "Mutation_Status",
                           return_SCESet = TRUE, theme_size = 12)
-head(reducedDimension(gbm_sceset))
+head(reducedDimension(sce))
 
 ## ----plot-reduceddim-4comp-colby-shapeby, fig.show=FALSE-------------------
-plotReducedDim(gbm_sceset, ncomponents = 4, colour_by = "Treatment",
+plotReducedDim(sce, ncomponents = 4, colour_by = "Treatment",
                shape_by = "Mutation_Status")
 
 ## ----plot-reduceddim-4comp-colby-sizeby-exprs, fig.show = FALSE------------
-plotReducedDim(gbm_sceset, ncomponents = 4, colour_by = "Gene_1000",
+plotReducedDim(sce, ncomponents = 4, colour_by = "Gene_1000",
                size_by = "Gene_0500")
 
 ## ----plot-pca-outlier------------------------------------------------------
-gbm_sceset <- plotPCA(gbm_sceset, pca_data_input = "pdata", 
+sce <- plotPCA(sce, pca_data_input = "pdata", 
                           detect_outliers = TRUE, return_SCESet = TRUE)
 
 
 ## ----plot-qc-expl-variables-all, warning=FALSE-----------------------------
-plotQC(gbm_sceset, type = "expl")
+plotQC(sce, type = "expl")
 
 ## ----plot-qc-expl-variables-select-variables-------------------------------
-plotQC(gbm_sceset, type = "expl",
+plotQC(sce, type = "expl",
        variables = c("total_features", "total_counts", "Mutation_Status", "Treatment",
                      "Cell_Cycle"))
 
 ## ----plot-qc-pairs-pc------------------------------------------------------
-plotQC(gbm_sceset, type = "expl", method = "pairs", theme_size = 6)
+plotQC(sce, type = "expl", method = "pairs", theme_size = 6)
 
 ## ----plot-qc-find-pcs-pcs-vs-vars, fig.width=8, fig.height=7---------------
-p1 <- plotQC(gbm_sceset, type = "find-pcs", variable = "total_features",
+p1 <- plotQC(sce, type = "find-pcs", variable = "total_features",
              plot_type = "pcs-vs-vars")
-p2 <- plotQC(gbm_sceset, type = "find-pcs", variable = "Cell_Cycle",
+p2 <- plotQC(sce, type = "find-pcs", variable = "Cell_Cycle",
              plot_type = "pcs-vs-vars")
 multiplot(p1, p2, cols = 2)
 
 ## ----plot-qc-find-pcs-pairs, fig.width=10, fig.height=7--------------------
-plotQC(gbm_sceset, type = "find-pcs", variable = "total_features",
+plotQC(sce, type = "find-pcs", variable = "total_features",
        plot_type = "pairs-pcs")
 
 ## ----plot-qc-find-pcs-pairs-2, fig.show=FALSE------------------------------
-plotQC(gbm_sceset, type = "find-pcs", variable = "Cell_Cycle",
+plotQC(sce, type = "find-pcs", variable = "Cell_Cycle",
        plot_type = "pairs-pcs")
 
 ## ----cell-pairwise-distance-matrices-euclidean, eval=TRUE------------------
-cell_dist <- dist(t(exprs(gbm_sceset)))
-cellPairwiseDistances(gbm_sceset) <- cell_dist
-plotMDS(gbm_sceset)
+cell_dist <- dist(t(exprs(sce)))
+cellPairwiseDistances(sce) <- cell_dist
+plotMDS(sce)
 
 ## ----cell-pairwise-distance-matrices-canberra, eval=TRUE, fig.show = FALSE----
-cell_dist <- dist(t(counts(gbm_sceset)), method = "canberra")
-cellPairwiseDistances(gbm_sceset) <- cell_dist
-plotMDS(gbm_sceset, colour_by = "Mutation_Status")
+cell_dist <- dist(t(counts(sce)), method = "canberra")
+cellPairwiseDistances(sce) <- cell_dist
+plotMDS(sce, colour_by = "Mutation_Status")
 
 ## ----feature-pairwise-distance-matrices, eval=FALSE------------------------
-#  feature_dist <- dist(exprs(gbm_sceset))
-#  featurePairwiseDistances(gbm_sceset) <- feature_dist
-#  limma::plotMDS(featDist(gbm_sceset))
+#  feature_dist <- dist(exprs(sce))
+#  featurePairwiseDistances(sce) <- feature_dist
+#  limma::plotMDS(featDist(sce))
 
 ## ----kallisto-demo-kallisto-test-data, eval=FALSE--------------------------
 #  ################################################################################

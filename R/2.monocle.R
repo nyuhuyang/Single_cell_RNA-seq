@@ -5,18 +5,16 @@
 # 
 # ######################################################################
 
-list.of.cran.packages <- c("VGAM", "irlba", "matrixStats", "igraph", 
-                           "combinat", "fastICA","grid", "gridExtra",
-                           "reshape2", "plyr", "parallel", "methods")
+list.of.cran.packages <- c("reshape2","gridExtra")
 new.packages <- list.of.cran.packages[!(list.of.cran.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) install.packages(new.packages)
-library(easypackages)
+
 
 source("https://bioconductor.org/biocLite.R")
-list.of.bio.packages <- c("DDRTree", "monocle","edgeR")
+list.of.bio.packages <- c("DDRTree", "monocle","edgeR","VGAM")
 new.packages <- list.of.bio.packages[!(list.of.bio.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)) biocLite(new.packages)
-
+library(easypackages)
 libraries(list.of.bio.packages,list.of.cran.packages)
 memory.limit(size=65000)
 
@@ -40,7 +38,20 @@ if (Sys.info()[['sysname']]=="Windows"){
 #count_matrix<-read.csv(paste0(WD,"/Cell_KB-1/outs/sample123.csv"),row.names = 1)
 #dim(count_matrix)
 
-#2.1=======create a CellDataSet object (Required) from CellRanger GeneBCMatrix====
+#2.1=======create a CellDataSet object (Required) from scater=======
+#http://cole-trapnell-lab.github.io/monocle-release/docs/
+sce <- readRDS("sce")
+id_symbol <- data.frame(id = rownames(fData(sce)),
+                        gene_short_name = fData(sce)$Gene)
+rownames(id_symbol) <- rownames(fData(sce))
+gbm_cds <- newCellDataSet(exprs(sce),
+                          phenoData = new("AnnotatedDataFrame", data = pData(sce)),
+                          featureData = new("AnnotatedDataFrame", data = id_symbol),
+                          lowerDetectionLimit=0.5,
+                          expressionFamily=negbinomial.size())
+#colnames(fData(gbm_cds))[2] <-"gene_short_name"
+
+#2.1--------create a CellDataSet object (Alternative) from CellRanger GeneBCMatrix====
 #http://cole-trapnell-lab.github.io/monocle-release/docs/
 gbm <- readRDS("gbm")
 
@@ -53,23 +64,56 @@ colnames(fData(gbm_cds))[2] <-"gene_short_name"
 
 #2.2=================Filtering low-quality data(Recommended)==================
 
-#=====QC===================
+#========QC after scater(Recommended)===================================
+dim(gbm_cds)
+
+
+par(mfrow=c(1,2))
+hist(gbm_cds$total_counts/1e3, xlab="Library sizes (thousands)", 
+     main="", xlim = c(0,100), 
+     breaks=30, col="grey80", ylab="Number of cells")
+hist(gbm_cds$total_features, xlab="Number of expressed genes", 
+     main="", xlim = c(0,8000),
+     breaks=20, col="grey80", ylab="Number of cells")
+
+#qplot(counts_per_cell, data=pData(gbm_cds), geom="density")+coord_cartesian(xlim = c(0, 30000))
+#qplot(genes_per_cell, data=pData(gbm_cds), geom="density")+coord_cartesian(xlim = c(0, 10000))
+qplot(gbm_cds$total_counts,gbm_cds$total_features, data=pData(gbm_cds))+
+        theme_bw()+theme_classic()
+
+#------QC after CellRanger(Alternative)------------------------------------
 dim(gbm_cds)
 counts_per_cell<- colSums(exprs(gbm_cds)) # mean count per cell
 genes_per_cell <- apply(exprs(gbm_cds), 2, function(c)sum(c!=0)) # mean gene per cell
 mean(counts_per_cell)
 median(genes_per_cell)
-qplot(counts_per_cell, data=pData(gbm_cds), geom="density")+coord_cartesian(xlim = c(0, 30000))
-qplot(genes_per_cell, data=pData(gbm_cds), geom="density")+coord_cartesian(xlim = c(0, 10000))
-qplot(counts_per_cell,genes_per_cell, data=pData(gbm_cds))
-#============================================================================
+par(mfrow=c(1,2))
+hist(counts_per_cell/1e3, xlab="Library sizes (thousands)", 
+     main="",# xlim = c(0,10), 
+     breaks=20, col="grey80", ylab="Number of cells")
+hist(genes_per_cell, xlab="Number of expressed genes", 
+     main="", xlim = c(0,8000),
+     breaks=20, col="grey80", ylab="Number of cells")
 
-# filtering low-quality genes
-gbm_cds <- detectGenes(gbm_cds, min_expr = 0.1)
-print(head(fData(gbm_cds)))
-print(head(pData(gbm_cds)))
+#qplot(counts_per_cell, data=pData(gbm_cds), geom="density")+coord_cartesian(xlim = c(0, 30000))
+#qplot(genes_per_cell, data=pData(gbm_cds), geom="density")+coord_cartesian(xlim = c(0, 10000))
+qplot(counts_per_cell,genes_per_cell)
+
+
+#=====filtering low-quality genes(Recommended)==================================
+par(mfrow=c(1,1))
+hist(log10(rowMeans(exprs(gbm_cds))), breaks=100, 
+     main="After gene filtering", col="grey80",xlim=c(-4,3),
+     xlab=expression(Log[10]~"average count for each gene"))
+abline(v=log10(0.1), col="blue", lwd=2, lty=2)
+abline(v=log10(0.01), col="red", lwd=2, lty=2)
+gbm_cds <- detectGenes(gbm_cds, min_expr = 0.01)
+#Normalization
 gbm_cds<-estimateSizeFactors(gbm_cds, locfunc=genefilter::shorth ) # if Size_Factor=NA, there are too many zeroes, 
 print(head(pData(gbm_cds)))
+plot(sizeFactors(gbm_cds), colSums(exprs(gbm_cds))/1e3, log="xy",
+     ylab="Library size (thousands)", xlab="Size factor",
+     main="After normalization")
 expressed_genes <- row.names(subset(fData(gbm_cds), num_cells_expressed >= 10))
 length(expressed_genes)
 
@@ -79,7 +123,7 @@ gbm_cds<-gbm_cds[expressed_genes,]
 #If you are using RPC values to measure expresion, 
 #as we are in this vignette, it's also good to look at the distribution
 #of mRNA totals across the cells:
-pData(gbm_cds)$Total_mRNAs <- Matrix::colSums(exprs(gbm_cds))
+pData(gbm_cds)$Total_mRNAs <- colSums(exprs(gbm_cds))
 # filtering low-quality cells
 gbm_cds <- gbm_cds[,pData(gbm_cds)$Total_mRNAs < 1e6]
 upper_bound <- 10^(mean(log10(pData(gbm_cds)$Total_mRNAs)) + 2*sd(log10(pData(gbm_cds)$Total_mRNAs)))
@@ -89,16 +133,10 @@ gbm_cds <- gbm_cds[,pData(gbm_cds)$Total_mRNAs > lower_bound &
 qplot(Total_mRNAs, data=pData(gbm_cds), geom="density") +
         geom_vline(xintercept=lower_bound) +
         geom_vline(xintercept=upper_bound)
+gbm_cds
+dim(gbm_cds)
 
-#Run quanlity control with boxplot----------------------------
-counts<- as.matrix(exprs(gbm_cds))
-logcounts <- cpm(counts,log=TRUE)
-
-boxplot(logcounts[,1:100],xlab="",cex=1, cex.axis=0.5, 
-        ylab = "log (base 10) counts + 1",
-        main="boxplot for first 100 scRNA-seq after filtering",las=2)
-
-# 2.3---------------Quanlity control (Recommended)--------------------
+# 2.3---------------Quanlity control (Alternative)--------------------
 # Log-transform each value in the expression matrix.
 L <- log(exprs(gbm_cds)+1)
 # Standardize each gene, so that they are all on the same scale,
@@ -107,7 +145,29 @@ melted_dens_df <- melt(t(scale(t(L))))
 # Plot the distribution of the standardized gene expression values.
 qplot(value, geom="density", data=melted_dens_df) + stat_function(fun = dnorm, size=0.5, color='red') +
         xlab("Standardized log(FPKM)") +
-        ylab("Density") #Slow.. 
+        ylab("Density") #Slow..
+
+# create sce from gbm_cds
+pd <- new("AnnotatedDataFrame", data = pData(gbm_cds))
+rownames(pd) <- pd$barcode
+gene_df <- data.frame(Gene = fData(gbm_cds)$Gene)
+rownames(gene_df) <- rownames(exprs(gbm_cds))
+fd <- new("AnnotatedDataFrame", data = gene_df)
+sce.final <- newSCESet(countData = exprs(gbm_cds), phenoData = pd,
+                 featureData = fd)
+sce.final
+dim(sce.final)
+#calculate quality control metrics such as the total number of counts 
+#or the proportion of counts in mitochondrial genes or spike-in transcripts.
+sce.final <- calculateQCMetrics(sce.final)
+par(mfrow=c(1,2))
+hist(sce.final$total_counts/1e3, xlab="Library sizes (thousands)", 
+     main="", xlim = c(0,100), 
+     breaks=30, col="grey80", ylab="Number of cells")
+hist(sce.final$total_features, xlab="Number of expressed genes", 
+     main="", xlim = c(0,8000),
+     breaks=20, col="grey80", ylab="Number of cells")
+
 #-----------------------------------------------------------------------
 # #####################################################################
 # 
@@ -120,7 +180,7 @@ qplot(value, geom="density", data=melted_dens_df) + stat_function(fun = dnorm, s
 #3.1 Classifying cells by type (Recommended)=============================================
 id_ <-function(gene){
     #return gene id
-    return(row.names(subset(fData(gbm_cds), gene_short_name == gene)))
+    return(row.names(subset(fData(gbm_cds),gene_short_name == gene))) #gene_short_name
 }
 #----------------back up scripts--------
 #fData(gbm_cds)[id_(""),]
@@ -201,6 +261,8 @@ cth <- addCellType(cth, "Beige Adipocytes", classify_func=function(x) {
 #===========================================================================
 
 HSMM <- classifyCells(gbm_cds, cth, 0.1)
+saveRDS(HSMM,"HSMM")
+HSMM <-readRDS("HSMM")
 #Error in if (type_res[cell_name] == TRUE) next_nodes <- c(next_nodes,  : 
 #missing value where TRUE/FALSE needed
 #check id_("") exist or not
@@ -261,7 +323,7 @@ plot_cell_clusters(HSMM_1, 1, 2, color="CellType") +
 
 
 
-#3.3 Clustering cells using marker genes(Alternative,so slow)-----------------
+#3.3----Clustering cells using marker genes(Alternative,so slow)-----------------
 #Semi-supervised cell clustering with known marker genes
 #Before we just picked genes that were highly expressed and highly variable.
 #Now, we'll pick genes that co-vary with our markers.
@@ -307,11 +369,11 @@ plot_cell_clusters(HSMM_2, 1, 2, color="CellType")
 #If there's no cell type thats above the threshold, the cluster is marked "Unknown"
 suppressWarnings(HSMM_3 <- clusterCells(HSMM_1,
                      num_clusters=15,
-                     frequency_thresh=0.4, #Original frequency_thresh=0.1 {0.3,0.45}
+                     frequency_thresh=0.3, #Original frequency_thresh=0.1 {0.3,0.45}
                      cell_type_hierarchy=cth))
 (pData(HSMM_3)$CellType)
 
-#-----test script----------------------------
+#-----test script(Alternative)----------------------------
 i=0.1;while(i<1){suppressWarnings(HSMM_3 <- clusterCells(HSMM_1,
                                                          num_clusters=15,
                                                          frequency_thresh=i, #Original frequency_thresh=0.1 {0.4,0.52}

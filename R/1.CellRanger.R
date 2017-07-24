@@ -5,16 +5,18 @@
 #cd ~/share/Cell_KB-1/outs
 #cellranger mat2csv filtered_gene_bc_matrices_h5.h5 sample123.csv
 #rsync -rav yah2014@pascal.med.cornell.edu:/home/yah2014/share/Cell_KB-1/outs/sample123.csv ./
+# https://abc.med.cornell.edu/pubshare
+# Username: cal2021@med.cornell.edu
+# PW: cal08176
 
 ########################################################################
 #
 #  0 check and install all cran and bioconductor packages if necessary
 # 
 # ######################################################################
-#source("http://cf.10xgenomics.com/supp/cell-exp/rkit-install-1.1.0.R")
+source("http://cf.10xgenomics.com/supp/cell-exp/rkit-install-1.1.0.R")
 library(cellrangerRkit)
 
-memory.limit(size=25000)
 
 # #####################################################################
 # 
@@ -46,18 +48,23 @@ saveRDS(gbm,file="gbm")
 gbm <- readRDS("gbm")
 
 
-#=====QC (Recommended) ======================================
+#------QC (Alternative) ------------------------------------
 anyNA(exprs(gbm))
 dim(gbm)
 counts_per_cell<- colSums(exprs(gbm)) # mean count per cell
 genes_per_cell <- apply(exprs(gbm), 2, function(c)sum(c!=0)) # mean gene per cell
 mean(counts_per_cell)
 median(genes_per_cell)
-qplot(counts_per_cell, data=pData(gbm), geom="density")+coord_cartesian(xlim = c(0, 30000))
-qplot(genes_per_cell, data=pData(gbm), geom="density")+scale_x_continuous(limits = c(0, 10000))
-qplot(counts_per_cell,genes_per_cell, data=pData(gbm))
-#============================================================================
+par(mfrow=c(1,2))
+hist(counts_per_cell/1e3, xlab="Library sizes (thousands)", main="", 
+     breaks=20, col="grey80", ylab="Number of cells")
+hist(genes_per_cell, xlab="Number of expressed genes", main="", 
+     breaks=20, col="grey80", ylab="Number of cells")
 
+#qplot(counts_per_cell/1e6, data=pData(gbm), geom="density")#+coord_cartesian(xlim = c(0, 30000))
+#qplot(genes_per_cell, data=pData(gbm), geom="density")+scale_x_continuous(limits = c(0, 10000))
+qplot(counts_per_cell,genes_per_cell, data=pData(gbm))
+#==t-SNE(Recommended)=================================================
 #The variable analysis_results contains pre-computed results for 
 #principle component analysis (PCA) dimensional reduction, 
 #t-SNE (t-Distributed Stochastic Neighbor Embedding) projection.
