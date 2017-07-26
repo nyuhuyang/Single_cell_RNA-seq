@@ -86,8 +86,8 @@ table(libsize.drop)
 feature.drop <- isOutlier(sce$total_features, nmads=3, type="lower", log=TRUE)
 table(feature.drop)
 
-sce1 <- sce[,!(libsize.drop | feature.drop )]#subsetting by column
-hist(sce1$total_features, xlab="Number of expressed genes", main="nmads=3", 
+sce <- sce[,!(libsize.drop | feature.drop )]#subsetting by column
+hist(sce$total_features, xlab="Number of expressed genes", main="nmads=3", 
      breaks=30, col="grey80", ylab="Number of cells")
 
 
@@ -178,7 +178,7 @@ saveRDS(sce,"sce")
 fontsize <- theme(axis.text=element_text(size=12), 
                   axis.title=element_text(size=16),
                   plot.title = element_text(size=22))
-plotQC(sce, type = "highest-expression", n=50) + fontsize
+plotQC(sce, type = "highest-expression", n=50) + fontsize #long long time
 
 #-----select non-zero counts genes at least n cells (Alternative)-------------
 numcells <- nexprs(sce, byrow=TRUE)

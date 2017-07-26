@@ -107,7 +107,8 @@ hist(log10(rowMeans(exprs(gbm_cds))), breaks=100,
      xlab=expression(Log[10]~"average count for each gene"))
 abline(v=log10(0.1), col="blue", lwd=2, lty=2)
 abline(v=log10(0.01), col="red", lwd=2, lty=2)
-gbm_cds <- detectGenes(gbm_cds, min_expr = 0.01)
+
+gbm_cds <- detectGenes(gbm_cds, min_expr = 0.01) #add num_cells_expressed in fData
 #Normalization
 gbm_cds<-estimateSizeFactors(gbm_cds, locfunc=genefilter::shorth ) # if Size_Factor=NA, there are too many zeroes, 
 print(head(pData(gbm_cds)))
