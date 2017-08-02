@@ -433,4 +433,27 @@ do.call(rbind.data.frame, tabfileslist)
         
         "3). Make a column with duplicated values unique in a dataframe"
 make.unique(as.character(myexprs$Gene), sep = ".")
+
+#2017-01-01
+"Wireless is slowing down"
+#download DNS jumper and chose the DNS with loweast ping
+
+"How to make heatmap with groupedrows and columns for ambigous cell type"
+        
+        "4).insert column to data.frame"
+        data.frame$A <- data # works
+        matrix$A <-data # doens't work
+        
+        "5).Make matrix with duplicated Ensembl_exprs row"
+        Gene_Ensembl_exprs <- dplyr::left_join(Gene_Ensembl, Ensembl_exprs,by = "Ensembl") #didn't use inner_join, need to name the rows
+        
+        "6).remove duplicated gene name with lower priority number"
+        duplicated(Gene_Ensembl_celltype$Gene) # doesn't return the 1st duplicates
+        
+        "7).order()"
+        #be aware of class when order()
+        A <-c(4,5,6,7,8, 10,20,30,47)
+        B <-as.character(A)
+        A[order(A)]
+        B[order(B)]
         
