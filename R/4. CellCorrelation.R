@@ -63,15 +63,58 @@ sampleNames(eData_tissue) <- sampleNames
 sampleNames <- sub(".\\d$", "", sampleNames) #delete .number
 sampleNames <- str_extract(sampleNames,'\\w+$') #Extract last word in string
 sampleNames <- sub("Ectoepithelial$", "Epithelial", sampleNames) #delete "Ecto"
+sampleNames <- sub("Epithelial$", "Epithelials", sampleNames)
 sampleNames <- sub("Endothelial$", "Endothelials", sampleNames) 
 sampleNames <- sub("Muscle$", "Muscles", sampleNames) 
 sampleNames <- sub("Stromal$", "Stromals", sampleNames)
 table(sampleNames)
 pData(eData_tissue)$group <- sampleNames
 pData(eData_tissue)$group
-saveRDS(eData_tissue,"eData_tissue")
+#----------regroup eData_tissue in alphabetic order(Alternative)-----
+eData_Endo <- eData_tissue[,pData(eData_tissue)$group=="Endothelials"]
+eData_Epit <- eData_tissue[,pData(eData_tissue)$group=="Epithelials"]
+eData_Fibr <- eData_tissue[,pData(eData_tissue)$group=="Fibroblasts"]
+eData_Musc <- eData_tissue[,pData(eData_tissue)$group=="Muscles"]
+eData_Stro <- eData_tissue[,pData(eData_tissue)$group=="Stromals"]
+
+#prepare files for the new expressoinset
+eData_names <- list(names=c(eData_Endo,eData_Epit,eData_Fibr,
+                            eData_Musc,eData_Stro))
+pData(eData_names$names[[1]])$group
+group <- lapply(eData_names$names,function(x) pData(x)$group)
+group <- unlist(group)
+
+pData(eData_names$names[[1]])$title
+title <- lapply(eData_names$names,function(x) pData(x)$title)
+title <- unlist(title)
+
+sampleNames(eData_names$names[[1]])
+sampleNames <- lapply(eData_names$names,function(x) sampleNames(x))
+sampleNames <- unlist(sampleNames)
+sampleNames <- as.character(sampleNames)
+
+head(exprs(eData_names$names[[1]]))
+All.exprs <- lapply(eData_names$names,function(x) exprs(x))
+All.exprs <- do.call(cbind,All.exprs)
+class(All.exprs)
+head(All.exprs)
+
+#----Construct the new ExpressoinSet(Alternative)------------------------
+samples <- data.frame(title = title,group = group)
+rownames(samples) <-sampleNames
+
+pd <- new("AnnotatedDataFrame",data=samples)
+head(pd)
+
+annotation(eData_tissue)
+tissue_new <- new("ExpressionSet", exprs = All.exprs, 
+                  phenoData = pd,
+                  annotation = annotation(eData_tissue))
+tissue_new
+saveRDS(tissue_new,"tissue_new")
 #=======4.1.1 saveRDS(eData_tissue,"eData_tissue")(Required)=========================
-eData_tissue <-readRDS("eData_tissue")
+#eData_tissue <-readRDS("eData_tissue")
+eData_tissue <-readRDS("tissue_new")
 
 #---------4.1.2 Quality control-----------------
 exp_raw <- log2(exprs(eData_tissue)+1)
@@ -266,7 +309,7 @@ col_names
 colnames(ImmuneCell_exprs) <- col_names
 head(ImmuneCell_exprs[,1:4])
 class(ImmuneCell_exprs)  #ready for join
-
+write.csv(ImmuneCell_exprs,"ImmuneCell_exprs.csv")
 #-----test spearman correlation for pure imune cell(Alternative)----------------
 # convert data.frame to matrix
 is.matrix(ImmuneCell_exprs)
@@ -294,7 +337,19 @@ pheatmap(c, col = rev(hmcol), clustering_distance_rows = "manhattan",
 # ===========4.6 Load SingleCell data (Required)=======================
 HSMM <-readRDS("HSMM")
 table(pData(HSMM)$CellType)
-# filter HSMM 
+# order HSMM by celltype
+HSMM <-HSMM[,order(pData(HSMM)$CellType)]
+# rename samples
+sampleNames(HSMM) <-make.unique(as.character(pData(HSMM)$CellType))
+sampleNames(HSMM)
+head(exprs(HSMM)[,1:6])
+# prepare expression data.frame
+SingleCell.all_exprs <- as.data.frame(exprs(HSMM))
+head(SingleCell.all_exprs[,1:5])
+class(SingleCell.all_exprs) #ready for join
+
+#-----for part of single cell--------------
+# filter HSMM --------------
 table(pData(HSMM)$Total_mRNAs >5500)
 HSMM <-HSMM[,pData(HSMM)$Total_mRNAs >5500]
 # order HSMM by celltype
@@ -303,17 +358,20 @@ HSMM <-HSMM[,order(pData(HSMM)$CellType)]
 sampleNames(HSMM) <-make.unique(as.character(pData(HSMM)$CellType))
 sampleNames(HSMM)
 head(exprs(HSMM)[,1:6])
-# insert Ensembl column to the 1st
+# prepare expression data.frame
 SingleCell_exprs <- as.data.frame(exprs(HSMM))
 head(SingleCell_exprs[,1:5])
 class(SingleCell_exprs) #ready for join
+
+
 # ===========4.7 test spearman correlation for SingleCell vs immune cells vs tissue cell (Required)=======================
 
 
-#==========4.7.1 insert Ensembl column to the 1st
+#==========4.7.1 insert Ensembl column to the 1st==========
 tissue  <- tissue_exprs_ensembl
 ImmuneCell <- ImmuneCell_exprs
 SingleCell <- SingleCell_exprs
+SingleCell.all <- SingleCell.all_exprs
 
 tissue$Ensembl <- rownames(tissue) # add Ensembl 
 tissue <- tissue[,c("Ensembl",colnames(tissue_exprs_ensembl))] 
@@ -322,16 +380,22 @@ head(tissue[,1:5])
 ImmuneCell$Ensembl <- rownames(ImmuneCell) #add Ensembl  
 ImmuneCell <- ImmuneCell[,c("Ensembl",colnames(ImmuneCell_exprs))] 
 head(ImmuneCell)
-
+#-----for part of single cell--------------
 SingleCell$Ensembl <- rownames(SingleCell) #add Ensembl  
 SingleCell <- SingleCell[,c("Ensembl",colnames(SingleCell_exprs))] 
 head(SingleCell[,1:5])
 
-#=======merge expression profile===============
+#-----for all single cell--------------
+SingleCell.all$Ensembl <- rownames(SingleCell.all) #add Ensembl  
+SingleCell.all <- SingleCell.all[,c("Ensembl",colnames(SingleCell.all_exprs))] 
+head(SingleCell.all[,1:5])
+
+#=======4.7.2 merge expression profile===============
 tissue_Immune <- inner_join(tissue, ImmuneCell,by = "Ensembl") 
 dim(tissue_Immune)
-head(tissue_Immune[,1:5])
+head(tissue_Immune,5)
 
+#-----for part of single cell--------------
 tissue_Immune_Single <- inner_join(tissue_Immune, SingleCell,by = "Ensembl") 
 dim(tissue_Immune_Single)
 head(tissue_Immune_Single[,1:5])
@@ -340,7 +404,17 @@ rownames(tissue_Immune_Single) <-tissue_Immune_Single$Ensembl
 tissue_Immune_Single <- tissue_Immune_Single[,-1]
 head(tissue_Immune_Single[,1:5])
 
+#-----for all single cell--------------
+tissue_Immune_Single.all <- inner_join(tissue_Immune, SingleCell.all,by = "Ensembl") 
+dim(tissue_Immune_Single.all)
+head(tissue_Immune_Single.all[,1:5])
+
+rownames(tissue_Immune_Single.all) <-tissue_Immune_Single.all$Ensembl
+tissue_Immune_Single.all <- tissue_Immune_Single.all[,-1]
+head(tissue_Immune_Single.all[,1:5])
+
 # convert data.frame to matrix==================
+#-----for all single cell--------------
 is.matrix(tissue_Immune_Single)
 tissue_Immune_Single.char <- as.matrix(tissue_Immune_Single)
 head(tissue_Immune_Single.char[,1:4])
@@ -354,53 +428,162 @@ rownames(tissue_Immune_Single.matrix) <- rownames(tissue_Immune_Single)
 colnames(tissue_Immune_Single.matrix) <- colnames(tissue_Immune_Single)
 is.matrix(tissue_Immune_Single.matrix)
 
+saveRDS(tissue_Immune_Single.matrix,"tissue_Immune_Single")
 
+#-----for all single cell--------------
+is.matrix(tissue_Immune_Single.all)
+tissue_Immune_Single.all.char <- as.matrix(tissue_Immune_Single.all)
+head(tissue_Immune_Single.all.char[,1:4])
+class(tissue_Immune_Single.all.char[1,1])
+
+tissue_Immune_Single.all.matrix <- apply(tissue_Immune_Single.all.char,2,as.numeric)
+dim(tissue_Immune_Single.all.matrix)
+head(tissue_Immune_Single.all.matrix[,1:4])
+class(tissue_Immune_Single.all.matrix)
+rownames(tissue_Immune_Single.all.matrix) <- rownames(tissue_Immune_Single.all)
+colnames(tissue_Immune_Single.all.matrix) <- colnames(tissue_Immune_Single.all)
+is.matrix(tissue_Immune_Single.all.matrix)
+
+saveRDS(tissue_Immune_Single.all.matrix,"tissue_Immune_Single.all")
+#====4.7.3 spearman correlation(required)===============
+#-----for part of single cell--------------
+tissue_Immune_Single.matrix <- readRDS("tissue_Immune_Single")
 c <- cor(tissue_Immune_Single.matrix, method="spearman")
-diag(c) <- NA
-colnames(c) <- NULL
-rownames(c) <- NULL
-hmcol <- colorRampPalette(rev(brewer.pal(9, "PuOr")))(255)
+#-----for all single cell--------------
+tissue_Immune_Single.matrix <- readRDS("tissue_Immune_Single.all")
+c <- cor(tissue_Immune_Single.all.matrix, method="spearman")
 
+#=====4.8 make grouped pheatmap=================================
+
+tissue_new <-readRDS("tissue_new")
+ImmuneCell_exprs <- read.csv("ImmuneCell_exprs.csv",row.names = 1)
+#========make annotdf==========
+
+category <- c(as.character(pData(tissue_new)$group),
+              rep("Immunes",ncol(ImmuneCell_exprs)),
+              rep("scRNA-seq",ncol(SingleCell_exprs)))
+
+Annotdf <- data.frame(row.names = colnames(tissue_Immune_Single.matrix), 
+                      category = category )  
+dim(Annotdf)
+head(Annotdf)
+
+#color
+newCols <- colorRampPalette(grDevices::rainbow(length(unique(Annotdf$category))))
+mycolors <- newCols(length(unique(Annotdf$category)))
+names(mycolors) <- unique(Annotdf$category)
+mycolors <- list(category = mycolors)
+
+#=========make gap_row============
+gaps_row <- as.data.frame(table(Annotdf))
+gaps_row
+gaps_row <- gaps_row[c(1,2,3,5,7,4,6),] #switch sequence
+gaps_row$gap <-NA #insert empty column
+gaps_row$gap[1] <-gaps_row$Freq[1]
+for(i in 2:length(gaps_row$gap)){
+        gaps_row$gap[i] <- gaps_row$gap[i-1] + gaps_row$Freq[i]}
+gaps_row
+
+
+#==========make pheatmap============
+diag(c) <- NA
+hmcol <- colorRampPalette(rev(brewer.pal(9, "PuOr")))(255)
 pheatmap(c,
          col = rev(hmcol),
-         clustering_distance_rows = "manhattan",
-         clustering_distance_cols = "manhattan",
-         #gaps_row=gaps_row$gap,
-         #         gaps_col=gaps_col$gap,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,         
+         #clustering_distance_rows = "euclidean",
+         #clustering_distance_cols = "euclidean",
+         gaps_row=gaps_row$gap,
+         #         gaps_col=gaps$col,
          #         cellheight = 7,
          #         cellwidth = 10,
-         #         border_color=NA,
-         fontsize_row = 8.5,
-         fontsize_col = 8.5,
-         fontsize =15,
-         main="Test spearman correlation: Single Cell vs pure cell types"
+         #border_color=NA,
+         fontsize_row = 8,
+         #fontsize_col = 8,
+         fontsize =18,
+         show_colnames = F,
+         main="Spearman coefficient: Single Cell vs pure cell types",
          #         filename = "TEST_12cat.png",
-         #annotation_row = annotdf,
-         #annotation_colors = mycolors
+         annotation_row = Annotdf,
+         annotation_colors = mycolors
 )
 
-# pheatmap small size-----------
+# pheatmap small size=======
 #select columns
-n_col <-ncol(SingleCell_exprs):ncol(tissue_Immune_Single)
+n_col <-(ncol(tissue_new)+ncol(ImmuneCell_exprs)+1):ncol(tissue_Immune_Single)
 colnames(c)[n_col]
 #select rows
-n_row <-1:ncol(exprs(HSMM))
-rownames(c)[n_row]
+tissue_row <-1:(ncol(tissue_new))
+rownames(c)[tissue_row]
 
-pheatmap(c[n_row,n_col],
+Immune_row <-(ncol(tissue_new)+1):(ncol(tissue_new)+ncol(ImmuneCell)-1)
+rownames(c)[Immune_row]
+
+tissue_Immune_row <-1:(ncol(tissue_new)+ncol(ImmuneCell)-1)
+rownames(c)[tissue_Immune_row]
+
+pheatmap(c[tissue_Immune_row,n_col],
+#         scale="column",
          col = rev(hmcol),
-         clustering_distance_rows = "manhattan",
-         clustering_distance_cols = "manhattan",
-         #gaps_row=gaps_row$gap,
-         #         gaps_col=gaps_col$gap,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,         
+         #clustering_distance_rows = "euclidean",
+         #clustering_distance_cols = "euclidean",
+         gaps_row=gaps_row$gap[1:5],
          #         cellheight = 7,
          #         cellwidth = 10,
-         #         border_color=NA,
-         fontsize_row = 8.5,
-         fontsize_col = 15,
+         #border_color=NA,
+         fontsize_row = 8,
+         fontsize_col = 8,
          fontsize =15,
-         main="Test spearman correlation: Single Cell vs pure cell types"
+         #show_colnames = T,
+         main="Spearman coefficient: Single Cell vs pure cell types",
          #         filename = "TEST_12cat.png",
-         #annotation_row = annotdf,
-         #annotation_colors = mycolors
+         annotation_row = Annotdf,
+         annotation_colors = mycolors
 )
+
+#=====4.9 cell cluster=================================
+#replace row cell names
+ImmuneCell.names <- colnames(ImmuneCell_exprs)
+ImmuneCell.names <- sub(".\\d$", "", ImmuneCell.names) #delete .number
+
+#-----for part of single cell--------------
+category.2 <- c(as.character(pData(tissue_new)$group),
+              ImmuneCell.names,
+              rep("scRNA-seq",ncol(SingleCell_exprs)))
+
+rownames(c) <-category.2
+#Find the maximum position for each col of a matrix
+Max.coe <-max.col(t(c[tissue_Immune_row,n_col]))
+rownames(c[tissue_Immune_row,n_col])[Max.coe]
+cell.cluster <- data.frame(Monocle=colnames(c[tissue_Immune_row,n_col]),
+                           Spearman=rownames(c[tissue_Immune_row,n_col])[Max.coe])
+head(cell.cluster)
+ss <- gridExtra::tableGrob(cell.cluster[1:28,])
+gridExtra::grid.arrange(ss) #make table
+ss <- gridExtra::tableGrob(cell.cluster[29:56,])
+gridExtra::grid.arrange(ss) #make table
+ss <- gridExtra::tableGrob(cell.cluster[57:67,])
+gridExtra::grid.arrange(ss) #make table
+
+#-----for all single cell--------------
+category.3 <- c(as.character(pData(tissue_new)$group),
+                ImmuneCell.names,
+                rep("scRNA-seq",ncol(SingleCell.all_exprs)))
+
+rownames(c) <-category.3
+#select columns
+single.all_col <-(ncol(tissue_new)+ncol(ImmuneCell_exprs)+1):ncol(tissue_Immune_Single.all)
+#Find the maximum position for each col of a matrix
+Max.coe <-max.col(t(c[tissue_Immune_row,single.all_col]))
+rownames(c[tissue_Immune_row,n_col])[Max.coe]
+cell.cluster <- data.frame(Monocle=as.character(pData(HSMM)$CellType),
+                           Spearman=rownames(c[tissue_Immune_row,single.all_col])[Max.coe])
+dim(cell.cluster)
+head(cell.cluster)
+tail(cell.cluster)
+table(cell.cluster$Monocle)
+table(cell.cluster$Spearman)
+write.csv(cell.cluster,"cell.cluster.csv")
