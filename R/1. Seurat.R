@@ -19,8 +19,8 @@ libraries(list.of.bio.packages,list.of.cran.packages)
 
 # #####################################################################
 # 
-#  1. Seurat
-#      http://satijalab.org/seurat/Kidney3k_tutorial.html
+#  1. Seurat Clustering 
+#      http://satijalab.org/seurat/pbmc3k_tutorial.html
 # ####################################################################
 #======1.0 Setup enviroment and read data (Required)============
 # detect OS and set enviroment
@@ -88,17 +88,18 @@ GenePlot(object = Kidney, gene1 = "nUMI", gene2 = "nGene")
 # 'gate' -Inf and Inf should be used if you don't want a lower or upper
 # threshold.
 Kidney <- FilterCells(object = Kidney, 
-                    subset.names = c("nGene", "percent.mito"), 
-                    low.thresholds = c(200, -Inf), 
-                    high.thresholds = c(9000, 0.95)) #2500-> 50000, 0.05->1
+                      subset.names = c("nGene", "percent.mito"), 
+                      low.thresholds = c(200, -Inf), 
+                      high.thresholds = c(9000, 0.5)) #2500-> 50000, 0.05->0.5
+
 str(Kidney@data) #Don't use summary()
-#=======Normalizing the data========
+#=====1.3 Normalizing the data========
 Kidney <- NormalizeData(object = Kidney, 
                       normalization.method = "LogNormalize", 
                       scale.factor = 10000)
 
 
-#====Detection of variable genes across the single cells===
+#====1.4 Detection of variable genes across the single cells===
 # The parameters here identify ~2,000 variable genes, and represent typical 
 # parameter settings for UMI data that is normalized to a total of 1e4 molecules.
 par(mfrow = c(1, 1))
@@ -111,11 +112,11 @@ Kidney <- FindVariableGenes(object = Kidney,
 length(x = Kidney@var.genes)
 
 
-#=====Scaling the data and removing unwanted sources of variation=====
+#=====1.5 Scaling the data and removing unwanted sources of variation=====
 Kidney <- ScaleData(object = Kidney, 
-                  vars.to.regress = c("nUMI", "percent.mito"))
+                  vars.to.regress = c("nUMI", "percent.mito")) #takes some time
 
-#====Perform linear dimensional reduction========
+#=====1.6 Perform linear dimensional reduction========
 Kidney <- RunPCA(object = Kidney, 
                pc.genes = Kidney@var.genes, 
                do.print = TRUE, 
@@ -139,17 +140,16 @@ PCHeatmap(object = Kidney, pc.use = 1, cells.use = 500, do.balanced = TRUE, labe
 PCHeatmap(object = Kidney, pc.use = 1:12, cells.use = 500, do.balanced = TRUE, 
           label.columns = FALSE, use.full = FALSE)
 
-#======Determine statistically significant principal components=====
+#======1.7 Determine statistically significant principal components=====
 # NOTE: This process can take a long time for big datasets, comment out for
 # expediency.  More approximate techniques such as those implemented in
 # PCElbowPlot() can be used to reduce computation time
 Kidney <- JackStraw(object = Kidney, num.replicate = 100, do.print = FALSE) #It takes long time
 JackStrawPlot(object = Kidney, PCs = 1:12)
 
-JackStrawPlot(object = Kidney, PCs = 1:12)
 PCElbowPlot(object = Kidney)
 
-#======Cluster the cells ======
+#======1.8 Cluster the cells ======
 # save.SNN = T saves the SNN so that the clustering algorithm can be rerun
 # using the same graph but with a different resolution value (see docs for
 # full details)
@@ -163,12 +163,12 @@ PrintFindClustersParams(object = Kidney)
 # While we do provide function-specific printing functions, the more general
 # function to print calculation parameters is PrintCalcParams().
 
-#======Run Non-linear dimensional reduction (tSNE)========
+#======1.9 Run Non-linear dimensional reduction (tSNE)========
 Kidney <- RunTSNE(object = Kidney, dims.use = 1:10, do.fast = TRUE)
 # note that you can set do.label=T to help label individual clusters
 TSNEPlot(object = Kidney)
 
-#====Finding differentially expressed genes (cluster biomarkers)===
+#======1.10 Finding differentially expressed genes (cluster biomarkers)===
 # find all markers of cluster 1
 cluster1.markers <- FindMarkers(object = Kidney, ident.1 = 1, min.pct = 0.25)
 print(x = head(x = cluster1.markers, n = 5))
@@ -181,15 +181,15 @@ print(x = head(x = cluster5.markers, n = 5))
 # find markers for every cluster compared to all remaining cells, report
 # only the positive ones
 Kidney.markers <- FindAllMarkers(object = Kidney, only.pos = TRUE, min.pct = 0.25, 
-                               thresh.use = 0.25)
+                               thresh.use = 0.25) #It takes long time
 Kidney.markers %>% group_by(cluster) %>% top_n(2, avg_diff)
 
 # Four tests for differential expression
-# ROC test (“roc”),
-# t-test (“t”),
-# LRT test based on zero-inflated data (“bimod”, default),
-# LRT test based on tobit-censoring models (“tobit”) 
-# The ROC test returns the ‘classification power’ 
+# ROC test ("roc"),
+# t-test ("t"),
+# LRT test based on zero-inflated data ("bimod", default),
+# LRT test based on tobit-censoring models ("tobit") 
+# The ROC test returns the "classification power" 
 # for any individual marker (ranging from 0 - random, to 1 - perfect).
 
 cluster1.markers <- FindMarkers(object = Kidney, ident.1 = 0, thresh.use = 0.25, 
@@ -199,10 +199,36 @@ VlnPlot(object = Kidney, features.plot = c("MS4A1", "CD79A"))
 # you can plot raw UMI counts as well
 VlnPlot(object = Kidney, features.plot = c("NKG7", "PF4"), use.raw = TRUE, y.log = TRUE)
 
+# find marker gene from proteinatlas.org
+# 1.type cell type (eg. epithelial)
+# 2.download tsv
+# 3.open tsv with excel
+# 4.copy the first 16 gene names
+# 5.paste in word, replace ^p with ","
+
 FeaturePlot(object = Kidney, 
-            features.plot = c("MS4A1", "GNLY", "CD3E",
-                              "CD14","FCER1A", "FCGR3A",
-                              "LYZ", "PPBP", "CD8A"),
+            features.plot = c("IL7R","GPX3","CD8A","FCER1A",
+                              "LYZ","CST3","GNLY","FCGR3A",
+                              "PRKD1","SFRP1","EPCAM","FGF9",
+                              "CXCL12","LYZ","CST3","FCGR3A"), 
+            cols.use = c("grey", "blue"), 
+            reduction.use = "tsne")
+
+
+FeaturePlot(object = Kidney, 
+            features.plot = c("MS4A7","CD14","CST3","MS4A7",
+                              "KDR","SELP","MS4A1","NET1",
+                              "FGF1","EPCAM","FGF9","DCN","CXCL12"), 
+            cols.use = c("grey", "blue"), 
+            reduction.use = "tsne")
+
+
+FeaturePlot(object = Kidney, 
+            features.plot = c("KRT19", "FCER1A", "FCGR3A","GPX3",
+                              "MMRN2","EMCN","ANPEP",
+                              "PTPRC","CD3D","CD3E","CD8A",
+                              "IL7R", "CD14","CD19","KLRD1","CD68",
+                              "LYZ","TNFRSF9","MS4A1","GNLY"),
             cols.use = c("grey", "blue"), 
             reduction.use = "tsne")
 # DoHeatmap generates an expression heatmap for given cells and genes.
@@ -214,23 +240,32 @@ top10 <- Kidney.markers %>% group_by(cluster) %>% top_n(10, avg_diff)
 DoHeatmap(object = Kidney, genes.use = top10$gene,
           slim.col.label = TRUE, remove.key = TRUE)
 
-#======Assigning cell type identity to clusters========
-current.cluster.ids <- c(0, 1, 2, 3, 4, 5, 6, 7)
-new.cluster.ids <- c("CD4 T cells",
-                     "CD14+ Monocytes",
-                     "B cells",
-                     "CD8 T cells", 
-                     "FCGR3A+ Monocytes",
-                     "NK cells",
-                     "Dendritic cells",
-                     "Megakaryocytes")
+#======1.11 Assigning cell type identity to clusters========
+current.cluster.ids <- c(0, 1, 2, 3, 4, 5, 6, 7,8,9,10,11,12,13,14,15)
+new.cluster.ids <- c("0) CD4 T cells",
+                     "1) Kidney specific cells",
+                     "2) Kidney specific cells",
+                     "3) Kidney specific cells",
+                     "4) CD8 T cells",
+                     "5) Kidney specific cells",
+                     "6) Dendritic Cells",
+                     "7) NK cells",
+                     "8) fibroblast",
+                     "9) Monocytes",
+                     "10) Monocytes",
+                     "11) endothelial & Megakaryocytes",
+                     "12) B cells",
+                     "13) ",
+                     "14) ",
+                     "15) stromal")
+table(Kidney@ident)
 Kidney@ident <- plyr::mapvalues(x = Kidney@ident,
                               from = current.cluster.ids,
                               to = new.cluster.ids)
-TSNEPlot(object = Kidney, do.label = TRUE, pt.size = 0.5)
+TSNEPlot(object = Kidney, no.legend = TRUE, do.label = TRUE)
 
 
-#=========Further subdivisions within cell types=======
+#======1.12 Further subdivisions within cell types=======
 # First lets stash our identities for later
 Kidney <- StashIdent(object = Kidney, save.name = "ClusterNames_0.6")
 
@@ -255,8 +290,8 @@ tcell.markers <- FindMarkers(object = Kidney, ident.1 = 0, ident.2 = 1)
 # palette from low to high expression
 FeaturePlot(object = Kidney, features.plot = c("S100A4", "CCR7"), cols.use = c("green", 
                                                                              "blue"))
-Kidney <- SetAllIdent(object = Kidney, id = "ClusterNames_0.6")
-save(Kidney, file = "./datasets/Kidney3k_final.Rda")
+Kidney <- SetAllIdent(object = Kidney, id = "ClusterNames_0.7")
+save(Kidney, file = "./datasets/Kidney_20170920.Rda")
 
 
 
