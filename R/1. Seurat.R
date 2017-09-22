@@ -156,7 +156,7 @@ PCElbowPlot(object = Kidney)
 Kidney <- FindClusters(object = Kidney, 
                      reduction.type = "pca", 
                      dims.use = 1:10, 
-                     resolution = 0.6, 
+                     resolution = 0.8,  #orginal 0.6,Further subdivisions 0.8
                      print.output = 0, 
                      save.SNN = TRUE)
 PrintFindClustersParams(object = Kidney) 
@@ -207,65 +207,65 @@ VlnPlot(object = Kidney, features.plot = c("NKG7", "PF4"), use.raw = TRUE, y.log
 # 5.paste in word, replace ^p with ","
 
 FeaturePlot(object = Kidney, 
-            features.plot = c("IL7R","GPX3","CD8A","FCER1A",
-                              "LYZ","CST3","GNLY","FCGR3A",
-                              "PRKD1","SFRP1","EPCAM","FGF9",
-                              "CXCL12","LYZ","CST3","FCGR3A"), 
+            features.plot = c("GLS","GPX3","MME","SLC22A2",
+                              "CD3E","IL7R","CD8A","FCER1A",
+                              "MS4A7","LYZ","GNLY","GZMB",
+                              "KLRD1","NKG7","FGF9","SFRP1"), 
             cols.use = c("grey", "blue"), 
             reduction.use = "tsne")
-
 
 FeaturePlot(object = Kidney, 
-            features.plot = c("MS4A7","CD14","CST3","MS4A7",
-                              "KDR","SELP","MS4A1","NET1",
-                              "FGF1","EPCAM","FGF9","DCN","CXCL12"), 
+            features.plot = c("CD14","KDR","FLT1","ACVRL1",
+                              "TEK","SELP","VWF","CD93",
+                              "CD79A","MS4A1","FGF1","NET1",
+                              "FGF9","DCN"), 
             cols.use = c("grey", "blue"), 
             reduction.use = "tsne")
 
-
-FeaturePlot(object = Kidney, 
-            features.plot = c("KRT19", "FCER1A", "FCGR3A","GPX3",
-                              "MMRN2","EMCN","ANPEP",
-                              "PTPRC","CD3D","CD3E","CD8A",
-                              "IL7R", "CD14","CD19","KLRD1","CD68",
-                              "LYZ","TNFRSF9","MS4A1","GNLY"),
-            cols.use = c("grey", "blue"), 
-            reduction.use = "tsne")
 # DoHeatmap generates an expression heatmap for given cells and genes.
 # In this case, we are plotting the top 20 markers 
 # (or all markers if less than 20) for each cluster.
-top10 <- Kidney.markers %>% group_by(cluster) %>% top_n(10, avg_diff)
+top10 <- Kidney.markers %>% group_by(cluster) %>% top_n(3, avg_diff)
 # setting slim.col.label to TRUE will print just the cluster IDS instead of
 # every cell name
 DoHeatmap(object = Kidney, genes.use = top10$gene,
           slim.col.label = TRUE, remove.key = TRUE)
 
 #======1.11 Assigning cell type identity to clusters========
-current.cluster.ids <- c(0, 1, 2, 3, 4, 5, 6, 7,8,9,10,11,12,13,14,15)
+current.cluster.ids <- 1:16
+
 new.cluster.ids <- c("0) CD4 T cells",
-                     "1) Kidney specific cells",
-                     "2) Kidney specific cells",
-                     "3) Kidney specific cells",
+                     "1) kidney cells",
+                     "2) kidney cells",
+                     "3) kidney cells",
                      "4) CD8 T cells",
-                     "5) Kidney specific cells",
-                     "6) Dendritic Cells",
-                     "7) NK cells",
-                     "8) fibroblast",
+                     "5) kidney cells",
+                     "6) Dendritic Cells\n & Monocytes",
+                     "7) NK cells &\n CD8 T cells",
+                     "8) Fibroblasts",
                      "9) Monocytes",
                      "10) Monocytes",
-                     "11) endothelial & Megakaryocytes",
+                     "11) Endothelial &\n Megakaryocytes",
                      "12) B cells",
-                     "13) ",
-                     "14) ",
-                     "15) stromal")
+                     "13) Fibroblast &\n Epithelial",
+                     "14) Unkown(FGF9 positive)",
+                     "15) Stromal Cells",
+                     "16) Unkown")
 table(Kidney@ident)
 Kidney@ident <- plyr::mapvalues(x = Kidney@ident,
                               from = current.cluster.ids,
                               to = new.cluster.ids)
-TSNEPlot(object = Kidney, no.legend = TRUE, do.label = TRUE)
+TSNEPlot(object = Kidney, no.legend = TRUE, do.label = TRUE,
+         label.size = 6)
+cluster16.markers <- FindMarkers(object = Kidney, ident.1 = 16, 
+                                min.pct = 0.25)
+cluster16 <- cluster16.markers[order(cluster16.markers$p_val),] %>% head(100) %>% rownames()
 
-
-#======1.12 Further subdivisions within cell types=======
+FeaturePlot(object = Kidney, 
+            features.plot = cluster16[1:16], 
+            cols.use = c("grey", "blue"), 
+            reduction.use = "tsne")
+#-----1.12 Further subdivisions within cell types--------
 # First lets stash our identities for later
 Kidney <- StashIdent(object = Kidney, save.name = "ClusterNames_0.6")
 
