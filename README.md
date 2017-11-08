@@ -21,3 +21,8 @@ Reproducing the original pseudo-time clustering plot in Shiny :https://nyhuyang.
 Distribution based on gene expression levels (y-axis) in Shiny: https://nyhuyang.shinyapps.io/single_cell_expression/
 
 - [Hemberg lab's Analysis of single cell RNA-seq data](http://hemberg-lab.github.io/scRNA.seq.course/) - [R] - This course we will discuss some of the questions that can be addressed using scRNA-seq as well as the available computational and statistical methods avialable. The course is taught through the University of Cambridge Bioinformatics training unit
+
+## Other study materials
+
+ - [【陈巍学基因】视频56：X10 genomics分析单细胞表达](https://www.youtube.com/watch?v=dbE1UlpxzHQ&t=235s) - [Youtube] - 介绍10X genomics系统，和用10X genomics来对一大群细胞（几 千个）当中每个单细胞的表达进行定量分析的工作原理。
+
