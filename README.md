@@ -15,10 +15,10 @@ List of workflow and tutorials for single-cell RNA-seq analysis
  
 - [Aaron Lun's Single Cell workflow on Bioconductor](http://bioconductor.org/help/workflows/simpleSingleCell/) - [R] - This article describes a computational workflow for basic analysis of scRNA-seq data using software packages from the open-source Bioconductor project.
 
-- [Cole Trapnell's Single Cell workflow](http://cole-trapnell-lab.github.io/monocle-release/docs/) - [R] - Monocle introduced the strategy of ordering single cells in pseudotime, placing them along a trajectory corresponding to a biological process such as cell differentiation by taking advantage of individual cell's asynchronous progression of those processes.
-example:
-Reproducing the original pseudo-time clustering plot in Shiny :https://nyhuyang.shinyapps.io/single_cell_clusters/
-Distribution based on gene expression levels (y-axis) in Shiny: https://nyhuyang.shinyapps.io/single_cell_expression/
+- [Cole Trapnell's Single Cell workflow](http://cole-trapnell-lab.github.io/monocle-release/docs/) - [R] - Monocle introduced the strategy of ordering single cells in pseudotime, placing them along a trajectory corresponding to a biological process such as cell differentiation by taking advantage of individual cell's asynchronous progression of those processes. </br>
+example:</br>
+Reproducing the original pseudo-time clustering plot in Shiny :https://nyhuyang.shinyapps.io/single_cell_clusters/</br>
+Distribution based on gene expression levels (y-axis) in Shiny: https://nyhuyang.shinyapps.io/single_cell_expression/</br>
 
 - [Hemberg lab's Analysis of single cell RNA-seq data](http://hemberg-lab.github.io/scRNA.seq.course/) - [R] - This course we will discuss some of the questions that can be addressed using scRNA-seq as well as the available computational and statistical methods avialable. The course is taught through the University of Cambridge Bioinformatics training unit
 
